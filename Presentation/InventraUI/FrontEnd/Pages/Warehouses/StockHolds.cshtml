@@ -1,0 +1,58 @@
+@page
+@attribute [Authorize(Roles = "Warehouses")]
+@{
+    ViewData["Title"] = "Stock Holds";
+}
+
+<div id="app" v-cloak>
+    <div class="sh-layout">
+        <div class="an-card">
+            <div class="an-head">
+                <h6><i class="fas fa-hand-paper me-2" style="color:var(--primary)"></i>Stock on hold <small>set aside, so it cannot be picked or promised</small></h6>
+                <div class="ap-tabs">
+                    <button v-for="t in state.tabs" :key="t.key" type="button" class="ap-tab" :class="{ on: state.tab === t.key }" @@click="state.tab = t.key">{{ t.label }}</button>
+                </div>
+            </div>
+            <div v-if="state.loading" class="text-muted small">Loading...</div>
+            <div v-else-if="!methods.list().length" class="text-muted small">Nothing here.</div>
+            <table class="table table-sm align-middle" v-else>
+                <thead><tr><th>Product</th><th>Warehouse</th><th class="text-end">Units</th><th>Reason</th><th>Placed</th><th></th></tr></thead>
+                <tbody>
+                    <tr v-for="h in methods.list()" :key="h.id">
+                        <td>{{ h.productName }}<br><small class="text-muted">{{ h.productNumber }}</small></td><td>{{ h.warehouseName }}</td>
+                        <td class="text-end"><b>{{ methods.n(h.quantity) }}</b><small v-if="h.status !== 'Active'" class="text-muted"> of {{ methods.n(h.originalQuantity) }} released</small></td>
+                        <td>{{ h.reason }}<div class="small text-muted" v-if="h.notes">{{ h.notes }}</div></td>
+                        <td class="small text-nowrap">{{ methods.when(h.createdAtUtc) }}<br>{{ methods.user(h.createdById) }}</td>
+                        <td class="text-end text-nowrap"><template v-if="h.status === 'Active'"><button class="btn btn-sm btn-outline-secondary" @@click="handler.release(h, false)">Release some</button> <button class="btn btn-sm btn-success" @@click="handler.release(h, true)">Release all</button></template><span v-else class="badge bg-secondary">Released</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="an-card">
+            <div class="an-head"><h6>Put stock on hold</h6></div>
+            <label class="sh-label">Warehouse</label>
+            <select class="form-select form-select-sm mb-2" v-model="state.form.warehouseId" @@change="state.form.key = ''"><option value="">Choose...</option><option v-for="w in state.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select>
+            <label class="sh-label">Product</label>
+            <select class="form-select form-select-sm mb-2" v-model="state.form.key"><option value="">Choose...</option><option v-for="s in methods.stockFor()" :key="s.productId" :value="s.productId">{{ s.productName }} ({{ s.productNumber }}) - {{ methods.n(s.onHand - s.held) }} free</option></select>
+            <div class="row g-2">
+                <div class="col-6"><label class="sh-label">Units</label><input type="number" min="0" step="any" class="form-control form-control-sm" v-model.number="state.form.quantity"></div>
+                <div class="col-6"><label class="sh-label">Reason</label><select class="form-select form-select-sm" v-model="state.form.reason"><option v-for="r in state.reasons" :key="r">{{ r }}</option></select></div>
+            </div>
+            <label class="sh-label mt-2">Note (optional)</label>
+            <input class="form-control form-control-sm" maxlength="500" v-model="state.form.notes">
+            <button class="btn btn-sm btn-primary mt-3" :disabled="state.busy" @@click="handler.place()"><i class="fas fa-hand-paper me-1"></i> Place on hold</button>
+            <div class="small text-muted mt-2">Held units are left out of pick suggestions and wave picking, and they are subtracted from the Available figure on Stock Availability. They still count as on hand until you scrap, return or release them.</div>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .sh-layout { display: grid; grid-template-columns: 1fr minmax(290px, 360px); gap: 1rem; margin: 1rem 1.5rem; align-items: start; }
+        .sh-label { display: block; font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: .2rem; }
+        @@media (max-width: 991px) { .sh-layout { grid-template-columns: 1fr; } }
+    </style>
+    <script src="~/FrontEnd/Pages/Warehouses/StockHolds.cshtml.js"></script>
+}

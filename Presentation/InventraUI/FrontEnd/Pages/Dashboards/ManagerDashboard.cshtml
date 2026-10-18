@@ -1,0 +1,34 @@
+@page
+@model InventraUI.FrontEnd.Pages.Dashboards.ManagerDashboardModel
+@attribute [Authorize]
+@{
+    ViewData["Title"] = "Manager";
+    ViewData["HideHead"] = true;
+}
+
+<link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+<link href="~/css/persona.css" rel="stylesheet" asp-append-version="true" />
+
+<partial name="_PersonaBody" />
+
+@section scripts {
+    <script>
+        window.PERSONA = {
+            title: 'Manager',
+            subtitle: 'Here is how the business is doing and what needs attention today.',
+            showUsers: false,
+            tiles: [
+            { title: 'Business analytics', text: 'Long-form charts for revenue, stock and operations', icon: 'fa-chart-line', link: '/Dashboards/BusinessAnalytics' },
+            { title: 'Operations KPIs', text: 'Cycle times, accuracy and dock performance', icon: 'fa-tachometer-alt', link: '/Warehouses/Kpis' },
+            { title: 'Sales orders', text: 'Customer orders and their status', icon: 'fa-shopping-cart', link: '/SalesOrders/SalesOrderList' },
+            { title: 'Purchase orders', text: 'Orders placed with suppliers', icon: 'fa-file-invoice', link: '/PurchaseOrders/PurchaseOrderList' },
+            { title: 'Stock availability', text: 'On hand, reserved, held and available', icon: 'fa-boxes', link: '/Products/StockAvailability' },
+            { title: 'Reorder suggestions', text: 'Items below their reorder point', icon: 'fa-cart-plus', link: '/PurchaseOrders/ReorderSuggestions' },
+            { title: 'Tasks & labor', text: 'Who is doing what on the floor', icon: 'fa-clipboard-check', link: '/Warehouses/Tasks' },
+            { title: 'Inventory insights', text: 'Slow movers and stock risks', icon: 'fa-lightbulb', link: '/StockReports/InventoryInsights' },
+            { title: 'ABC & aging', text: 'Which items matter and which sit still', icon: 'fa-sort-amount-down', link: '/StockReports/Analysis' }
+            ]
+        };
+    </script>
+    <script src="~/js/persona-dashboard.js" asp-append-version="true"></script>
+}

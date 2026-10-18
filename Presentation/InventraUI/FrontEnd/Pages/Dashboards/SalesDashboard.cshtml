@@ -1,0 +1,31 @@
+@page
+@model InventraUI.FrontEnd.Pages.Dashboards.SalesDashboardModel
+@attribute [Authorize]
+@{
+    ViewData["Title"] = "Sales";
+    ViewData["HideHead"] = true;
+}
+
+<link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+<link href="~/css/persona.css" rel="stylesheet" asp-append-version="true" />
+
+<partial name="_PersonaBody" />
+
+@section scripts {
+    <script>
+        window.PERSONA = {
+            title: 'Sales',
+            subtitle: 'Here are your sales and delivery items for today.',
+            showUsers: false,
+            tiles: [
+            { title: 'Sales orders', text: 'Take and confirm customer orders', icon: 'fa-shopping-cart', link: '/SalesOrders/SalesOrderList' },
+            { title: 'Backorders', text: 'Orders waiting for stock', icon: 'fa-hourglass-half', link: '/SalesOrders/Backorders' },
+            { title: 'Customers', text: 'Customers and their contacts', icon: 'fa-address-book', link: '/Customers/CustomerList' },
+            { title: 'Delivery orders', text: 'Ship what was ordered', icon: 'fa-truck', link: '/DeliveryOrders/DeliveryOrderList' },
+            { title: 'Sales returns', text: 'Take goods back from a customer', icon: 'fa-undo', link: '/SalesReturns/SalesReturnList' },
+            { title: 'Sales report', text: 'Revenue by customer and period', icon: 'fa-chart-bar', link: '/SalesReports/SalesReportList' }
+            ]
+        };
+    </script>
+    <script src="~/js/persona-dashboard.js" asp-append-version="true"></script>
+}

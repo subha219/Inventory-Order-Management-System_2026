@@ -1,0 +1,62 @@
+@page
+@attribute [Authorize(Roles = "Warehouses")]
+@{
+    ViewData["Title"] = "Returns Inspection";
+}
+
+<div id="app" v-cloak>
+    <div class="pk-layout">
+        <div class="an-card">
+            <div class="an-head"><h6><i class="fas fa-undo-alt me-2" style="color:var(--primary)"></i>Customer returns <small>received back</small></h6></div>
+            <input type="search" class="form-control form-control-sm mb-2" v-model="state.search" placeholder="Search number or customer">
+            <div v-if="state.loading" class="text-muted small py-3">Loading...</div>
+            <div v-else-if="!methods.returns().length" class="text-muted small py-3">No confirmed sales returns yet. Confirm a Sales Return first, then inspect it here.</div>
+            <button v-for="r in methods.returns()" :key="r.id" type="button" class="pk-order" :class="{ on: state.selected === r.id }" @@click="handler.select(r.id)">
+                <div class="d-flex justify-content-between"><b>{{ r.number }}</b><span class="badge" :class="r.inspected ? (r.damaged > 0 ? 'bg-warning text-dark' : 'bg-success') : 'bg-secondary'">{{ r.inspected ? (r.damaged > 0 ? 'Damaged found' : 'Inspected') : 'To inspect' }}</span></div>
+                <small class="text-muted">{{ r.customer || 'No customer' }} &middot; {{ methods.day(r.returnDate) }} &middot; {{ methods.n(r.units) }} units</small>
+            </button>
+
+            <div v-if="state.reasons.length" class="mt-3">
+                <div class="small fw-bold text-uppercase text-muted mb-1">Return reasons, last 90 days</div>
+                <div v-for="x in state.reasons" :key="x.reason" class="d-flex justify-content-between small"><span>{{ x.reason }}</span><b>{{ methods.n(x.units) }}</b></div>
+            </div>
+        </div>
+
+        <div class="an-card">
+            <div v-if="!state.selected" class="text-muted py-5 text-center">Choose a return to record what condition the goods came back in.</div>
+            <template v-else>
+                <div class="an-head">
+                    <h6>{{ methods.current()?.number }} <small>{{ methods.current()?.customer }}</small></h6>
+                    <button type="button" class="btn btn-sm btn-primary" :disabled="state.saving" @@click="handler.save()"><i class="fas fa-save me-1"></i> Save inspection</button>
+                </div>
+                <div class="small text-muted mb-2">Good units can be put back into a storage location. Damaged units go on a <b>draft Scrapping</b> document, so nothing is written off until you confirm it.<span v-if="state.scrapNumber"> Current draft: <b>{{ state.scrapNumber }}</b>.</span></div>
+
+                <div v-for="l in state.lines" :key="l.productId" class="pk-line">
+                    <div class="d-flex justify-content-between flex-wrap"><div><b>{{ l.productName }}</b> <small class="text-muted">{{ l.productNumber }}</small></div><div class="small">Returned <b>{{ methods.n(l.returned) }}</b></div></div>
+                    <div class="ri-grid mt-2" v-if="state.form[l.productId]">
+                        <div><label>Good</label><input type="number" min="0" step="any" class="form-control form-control-sm text-end" v-model.number="state.form[l.productId].good"></div>
+                        <div><label>Damaged</label><input type="number" min="0" step="any" class="form-control form-control-sm text-end" v-model.number="state.form[l.productId].damaged"></div>
+                        <div><label>Reason</label><select class="form-select form-select-sm" v-model="state.form[l.productId].reasonCode"><option value="">-</option><option v-for="c in state.reasonCodes" :key="c" :value="c">{{ c }}</option></select></div>
+                        <div><label>Put good units in</label><select class="form-select form-select-sm" v-model="state.form[l.productId].locationId"><option value="">No location</option><option v-for="x in state.locations" :key="x.id" :value="x.id">{{ x.code }}{{ x.zone ? ' (' + x.zone + ')' : '' }}</option></select></div>
+                        <div class="ri-note"><label>Note</label><input class="form-control form-control-sm" v-model="state.form[l.productId].note" maxlength="500"></div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .pk-layout { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; gap: 1rem; margin: 1rem 1.5rem; align-items: start; }
+        .pk-order { display: block; width: 100%; text-align: left; border: 1px solid var(--line); background: var(--surface); color: inherit; border-radius: 10px; padding: .6rem .8rem; margin-bottom: .5rem; cursor: pointer; }
+        .pk-order.on { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-tint); }
+        .pk-line { border: 1px solid var(--line); border-radius: 12px; padding: .8rem 1rem; margin-bottom: .8rem; background: var(--surface-2); }
+        .ri-grid { display: grid; grid-template-columns: 90px 90px minmax(130px, 1fr) minmax(160px, 1.2fr); gap: .6rem; }
+        .ri-note { grid-column: 1 / -1; }
+        .ri-grid label { display: block; font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: .2rem; }
+        @@media (max-width: 991px) { .pk-layout { grid-template-columns: 1fr; } .ri-grid { grid-template-columns: 1fr 1fr; } }
+    </style>
+    <script src="~/FrontEnd/Pages/Warehouses/ReturnsInspection.cshtml.js"></script>
+}

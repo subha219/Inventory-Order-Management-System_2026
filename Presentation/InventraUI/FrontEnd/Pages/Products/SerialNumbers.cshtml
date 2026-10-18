@@ -1,0 +1,111 @@
+@page
+@attribute [Authorize(Roles = "Products")]
+@{
+    ViewData["Title"] = "Serial Numbers";
+}
+
+<div id="app" v-cloak>
+    <div class="an-card" style="margin:1rem 1.5rem">
+        <div class="an-head">
+            <h6><i class="fas fa-barcode me-2" style="color:var(--primary)"></i>Serial numbers <small>track individual units from receipt to customer</small></h6>
+            <button type="button" class="btn btn-sm btn-primary" @@click="state.showRegister = !state.showRegister"><i class="fas fa-plus me-1"></i> Register serials</button>
+        </div>
+
+        <div v-if="state.showRegister" class="sn-form">
+            <div class="sn-grid">
+                <div><label>Product</label>
+                    <select class="form-select form-select-sm" v-model="state.reg.productId"><option value="">Choose...</option><option v-for="p in state.products" :key="p.id" :value="p.id">{{ p.name }} ({{ p.number }})</option></select></div>
+                <div><label>Warehouse</label>
+                    <select class="form-select form-select-sm" v-model="state.reg.warehouseId" @@change="handler.loadLocations()"><option value="">Choose...</option><option v-for="w in state.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select></div>
+                <div><label>Location (optional)</label>
+                    <select class="form-select form-select-sm" v-model="state.reg.locationId"><option value="">Not placed</option><option v-for="l in state.locations" :key="l.id" :value="l.id">{{ l.code }}</option></select></div>
+                <div><label>Notes (optional)</label><input type="text" class="form-control form-control-sm" v-model="state.reg.notes" placeholder="e.g. batch from supplier"></div>
+            </div>
+            <div class="sn-gen">
+                <label>Quick range</label>
+                <input type="text" class="form-control form-control-sm" v-model="state.gen.prefix" placeholder="Prefix, e.g. SN-">
+                <input type="number" min="0" class="form-control form-control-sm" v-model.number="state.gen.from" placeholder="From">
+                <input type="number" min="0" class="form-control form-control-sm" v-model.number="state.gen.to" placeholder="To">
+                <input type="number" min="1" class="form-control form-control-sm" v-model.number="state.gen.pad" placeholder="Digits">
+                <button type="button" class="btn btn-sm btn-outline-primary" @@click="handler.generate()">Fill list</button>
+            </div>
+            <label class="mt-2">Serial numbers, one per line <span class="text-muted">({{ methods.parsed().length }})</span></label>
+            <textarea class="form-control" rows="5" v-model="state.reg.text" placeholder="Scan or paste serial numbers here"></textarea>
+            <div class="mt-2 text-end">
+                <button type="button" class="btn btn-sm btn-outline-secondary me-1" @@click="state.showRegister = false">Cancel</button>
+                <button type="button" class="btn btn-sm btn-primary" :disabled="state.saving" @@click="handler.register()">Register {{ methods.parsed().length }} serial(s)</button>
+            </div>
+        </div>
+
+        <div class="small fw-bold text-uppercase text-muted mb-1">Coverage by product</div>
+        <div class="table-responsive mb-3">
+            <table class="table table-sm align-middle mb-0">
+                <thead><tr><th>Product</th><th class="text-end">Serials in stock</th><th class="text-end">Shipped</th><th class="text-end">Units on hand</th><th class="text-end">Without serial</th><th></th></tr></thead>
+                <tbody>
+                    <tr v-if="!state.summary.length"><td colspan="6" class="text-center text-muted py-3">{{ state.loading ? 'Loading...' : 'No serial numbers yet. Use Register serials to add some.' }}</td></tr>
+                    <tr v-for="s in state.summary" :key="s.productId">
+                        <td><div class="fw-semibold">{{ s.productName }}</div><small class="text-muted">{{ s.productNumber }}</small></td>
+                        <td class="text-end">{{ s.inStock }}</td><td class="text-end">{{ s.shipped }}</td><td class="text-end">{{ methods.n(s.onHand) }}</td>
+                        <td class="text-end" :class="s.unregistered > 0 ? 'text-warning fw-bold' : ''">{{ methods.n(s.unregistered) }}</td>
+                        <td class="text-end"><button type="button" class="btn btn-sm btn-link" @@click="state.productId = s.productId; handler.load()">Show</button></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="sn-filters">
+            <input type="search" class="form-control form-control-sm" v-model="state.search" @@keyup.enter="handler.load()" placeholder="Search a serial number, customer, delivery or receipt, then Enter">
+            <select class="form-select form-select-sm" v-model="state.status" @@change="handler.load()">
+                <option value="">Any status</option><option value="InStock">In stock</option><option value="Shipped">Shipped</option><option value="Returned">Returned</option><option value="Scrapped">Scrapped</option>
+            </select>
+            <select class="form-select form-select-sm" v-model="state.productId" @@change="handler.load()">
+                <option value="">All products</option><option v-for="p in state.products" :key="p.id" :value="p.id">{{ p.name }}</option>
+            </select>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead><tr><th>Serial number</th><th>Product</th><th>Status</th><th>Where / to whom</th><th>History</th><th></th></tr></thead>
+                <tbody>
+                    <tr v-if="state.loading"><td colspan="6" class="text-center text-muted py-4">Loading...</td></tr>
+                    <tr v-else-if="!state.rows.length"><td colspan="6" class="text-center text-muted py-4">No serial numbers match.</td></tr>
+                    <tr v-for="r in state.rows" :key="r.id">
+                        <td class="fw-semibold">{{ r.serialNumber }}</td>
+                        <td><div>{{ r.productName }}</div><small class="text-muted">{{ r.productNumber }}</small></td>
+                        <td><span class="badge" :class="methods.badge(r.status)">{{ methods.statusText(r.status) }}</span></td>
+                        <td class="small">
+                            <template v-if="r.status === 'Shipped'">{{ r.customerName || 'Customer' }}<div class="text-muted">{{ r.deliveryOrderNumber }}</div></template>
+                            <template v-else>{{ r.warehouseName || '-' }}<span v-if="r.locationCode"> &middot; {{ r.locationCode }}</span></template>
+                        </td>
+                        <td class="small text-muted">
+                            <div>Registered {{ methods.when(r.registeredAt) }}<span v-if="r.goodsReceiveNumber"> on {{ r.goodsReceiveNumber }}</span></div>
+                            <div v-if="r.shippedAt">Shipped {{ methods.when(r.shippedAt) }}</div><div v-if="r.notes">{{ r.notes }}</div>
+                        </td>
+                        <td class="text-end text-nowrap">
+                            <button v-if="r.status === 'InStock' || r.status === 'Returned'" type="button" class="btn btn-sm btn-outline-primary me-1" @@click="handler.ship(r)">Ship</button>
+                            <button v-if="r.status === 'Shipped'" type="button" class="btn btn-sm btn-outline-secondary me-1" @@click="handler.setStatus(r, 'Returned')">Returned</button>
+                            <button v-if="r.status === 'Returned'" type="button" class="btn btn-sm btn-outline-secondary me-1" @@click="handler.setStatus(r, 'InStock')">Back in stock</button>
+                            <button v-if="r.status !== 'Scrapped' && r.status !== 'Shipped'" type="button" class="btn btn-sm btn-outline-danger me-1" @@click="handler.setStatus(r, 'Scrapped')">Scrap</button>
+                            <button v-if="r.status !== 'Shipped'" type="button" class="btn btn-sm btn-link text-muted" title="Delete a mistyped serial" @@click="handler.remove(r)"><i class="fas fa-trash"></i></button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div v-if="state.truncated" class="small text-muted mt-2">Showing the latest 500 of {{ state.total }}. Narrow the search to see others.</div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .sn-form { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 1rem; margin-bottom: 1rem; }
+        .sn-form label, .sn-gen label { display: block; font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: .25rem; }
+        .sn-grid { display: grid; grid-template-columns: repeat(4, minmax(140px, 1fr)); gap: .8rem; margin-bottom: .8rem; }
+        .sn-gen { display: grid; grid-template-columns: auto 1fr 110px 110px 90px auto; gap: .5rem; align-items: end; }
+        .sn-gen label { margin: 0; align-self: center; }
+        .sn-filters { display: grid; grid-template-columns: 1fr 170px 220px; gap: .6rem; margin-bottom: 1rem; }
+        @@media (max-width: 991px) { .sn-grid, .sn-gen, .sn-filters { grid-template-columns: 1fr 1fr; } }
+    </style>
+    <script src="~/FrontEnd/Pages/Products/SerialNumbers.cshtml.js"></script>
+}

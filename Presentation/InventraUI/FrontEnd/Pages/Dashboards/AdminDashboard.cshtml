@@ -1,0 +1,33 @@
+@page
+@model InventraUI.FrontEnd.Pages.Dashboards.AdminDashboardModel
+@attribute [Authorize]
+@{
+    ViewData["Title"] = "Administration";
+    ViewData["HideHead"] = true;
+}
+
+<link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+<link href="~/css/persona.css" rel="stylesheet" asp-append-version="true" />
+
+<partial name="_PersonaBody" />
+
+@section scripts {
+    <script>
+        window.PERSONA = {
+            title: 'Administration',
+            subtitle: 'Here is the health of the system, the people and the business.',
+            showUsers: true,
+            tiles: [
+            { title: 'Users', text: 'Create logins, block or remove people', icon: 'fa-users', link: '/Users/UserList' },
+            { title: 'Job roles', text: 'Give people a job role and check test logins', icon: 'fa-user-tag', link: '/Users/RolePresets' },
+            { title: 'Permissions', text: 'Switch create, edit and delete on or off per role', icon: 'fa-user-lock', link: '/Users/Permissions' },
+            { title: 'Approvals', text: 'Requests waiting for a decision', icon: 'fa-user-check', link: '/Users/Approvals' },
+            { title: 'Audit log', text: 'Who changed what, and when', icon: 'fa-history', link: '/Users/AuditLog' },
+            { title: 'Integrations', text: 'API keys and webhooks', icon: 'fa-plug', link: '/Users/Integrations' },
+            { title: 'Automation', text: 'Rules that watch stock and raise alerts', icon: 'fa-robot', link: '/Users/Automation' },
+            { title: 'Business analytics', text: 'Long-form charts for revenue, stock and operations', icon: 'fa-chart-line', link: '/Dashboards/BusinessAnalytics' }
+            ]
+        };
+    </script>
+    <script src="~/js/persona-dashboard.js" asp-append-version="true"></script>
+}

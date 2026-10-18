@@ -1,0 +1,77 @@
+@page
+@attribute [Authorize(Roles = "StockCounts")]
+@{
+    ViewData["Title"] = "Cycle Counts";
+}
+
+<div id="app" v-cloak>
+    <div class="an-card" style="margin:1rem 1.5rem">
+        <div class="an-head">
+            <h6><i class="fas fa-clipboard-list me-2" style="color:var(--primary)"></i>Cycle counts <small>count a few items often instead of everything once a year</small></h6>
+            <button type="button" class="btn btn-sm btn-primary" :disabled="state.saving || !state.selected.length" @@click="handler.createSheet()"><i class="fas fa-file-medical me-1"></i> Create count sheet ({{ state.selected.length }})</button>
+        </div>
+
+        <div class="cc-controls">
+            <div><label>Warehouse</label>
+                <select class="form-select form-select-sm" v-model="state.warehouseId" @@change="handler.load()"><option value="">Choose...</option><option v-for="w in state.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select></div>
+            <div><label>Count class A every (days)</label><input type="number" min="1" class="form-control form-control-sm" v-model.number="state.daysA" @@change="handler.load()"></div>
+            <div><label>Class B every (days)</label><input type="number" min="1" class="form-control form-control-sm" v-model.number="state.daysB" @@change="handler.load()"></div>
+            <div><label>Class C every (days)</label><input type="number" min="1" class="form-control form-control-sm" v-model.number="state.daysC" @@change="handler.load()"></div>
+        </div>
+
+        <div class="sa-kpis" v-if="state.warehouseId">
+            <div class="sa-kpi"><span>Class A due</span><b>{{ state.dueA }}</b></div>
+            <div class="sa-kpi"><span>Class B due</span><b>{{ state.dueB }}</b></div>
+            <div class="sa-kpi"><span>Class C due</span><b>{{ state.dueC }}</b></div>
+            <div class="sa-kpi" :class="{ warn: state.neverCounted > 0 }"><span>Never counted</span><b>{{ state.neverCounted }}</b></div>
+        </div>
+
+        <div class="sa-filters" v-if="state.warehouseId">
+            <div class="sa-chips">
+                <button v-for="f in state.filters" :key="f.key" type="button" class="sa-chip" :class="{ on: state.filter === f.key }" @@click="state.filter = f.key">{{ f.label }}</button>
+            </div>
+            <div>
+                <button type="button" class="btn btn-sm btn-outline-secondary me-1" @@click="handler.selectDue()">Select all due</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" @@click="state.selected = []">Clear</button>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead><tr><th style="width:36px"></th><th>Product</th><th>Class</th><th class="text-end">System qty</th><th class="text-end">Stock value</th><th>Last counted</th><th>Status</th></tr></thead>
+                <tbody>
+                    <tr v-if="!state.warehouseId"><td colspan="7" class="text-center text-muted py-4">Choose a warehouse to see which items are due for counting.</td></tr>
+                    <tr v-else-if="state.loading"><td colspan="7" class="text-center text-muted py-4">Loading...</td></tr>
+                    <tr v-else-if="!methods.rows().length"><td colspan="7" class="text-center text-muted py-4">Nothing matches this filter.</td></tr>
+                    <tr v-for="i in methods.rows()" :key="i.productId">
+                        <td><input type="checkbox" :value="i.productId" v-model="state.selected"></td>
+                        <td><div class="fw-semibold">{{ i.productName }}</div><small class="text-muted">{{ i.productNumber }}</small></td>
+                        <td><span class="badge" :class="methods.cls(i.abcClass)">{{ i.abcClass }}</span></td>
+                        <td class="text-end">{{ methods.n(i.systemQty) }}</td><td class="text-end">{{ methods.n(i.value) }}</td>
+                        <td>{{ i.lastCounted ? methods.day(i.lastCounted) + ' (' + i.daysSince + 'd ago)' : 'Never' }}</td>
+                        <td><span class="badge" :class="i.due ? 'bg-warning text-dark' : 'bg-success'">{{ i.due ? (i.daysSince == null ? 'Due, never counted' : 'Due, ' + i.overdueDays + 'd over') : 'Up to date' }}</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="small text-muted mt-2">Class A is the top 80 percent of stock value, B the next 15 percent, C the rest. Only confirmed stock counts reset the clock. The count sheet opens as a Draft stock count with each line at the system quantity; type the real counts on the Stock Count page, then confirm it to book the differences.</div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .cc-controls { display: grid; grid-template-columns: minmax(200px, 1.4fr) repeat(3, minmax(120px, 1fr)); gap: .8rem; margin-bottom: 1rem; }
+        .cc-controls label { display: block; font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: .25rem; }
+        .sa-kpis { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: .8rem; margin-bottom: 1rem; }
+        .sa-kpi { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: .7rem .9rem; }
+        .sa-kpi span { display: block; font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+        .sa-kpi b { font-size: 1.4rem; color: var(--ink); } .sa-kpi.warn b { color: var(--warn); }
+        .sa-filters { display: flex; flex-wrap: wrap; gap: .8rem; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .sa-chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+        .sa-chip { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: .25rem .8rem; font-size: .8rem; cursor: pointer; }
+        .sa-chip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+        @@media (max-width: 991px) { .cc-controls, .sa-kpis { grid-template-columns: 1fr 1fr; } }
+    </style>
+    <script src="~/FrontEnd/Pages/StockCounts/CycleCounts.cshtml.js"></script>
+}

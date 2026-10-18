@@ -1,0 +1,96 @@
+@page
+@attribute [Authorize(Roles = "Products")]
+@{
+    ViewData["Title"] = "Recall Trace";
+}
+
+<div id="app" v-cloak>
+    <div class="an-card" style="margin:1rem 1.5rem">
+        <div class="an-head">
+            <h6><i class="fas fa-route me-2" style="color:var(--primary)"></i>Recall trace <small>from a batch or serial number to the customers who received it</small></h6>
+            <button type="button" class="btn btn-sm btn-outline-primary" :disabled="!state.customers.length" @@click="handler.exportCsv()"><i class="fas fa-file-csv me-1"></i> Export customers</button>
+        </div>
+
+        <div class="rt-search">
+            <input type="search" class="form-control" v-model="state.term" @@keyup.enter="handler.search()" placeholder="Enter a batch number or serial number, then press Enter">
+            <button type="button" class="btn btn-primary" :disabled="state.loading || state.term.trim().length < 2" @@click="handler.search()"><i class="fas fa-search me-1"></i> Trace</button>
+        </div>
+
+        <div v-if="!state.searched" class="text-muted py-4 text-center">Type at least two characters of a batch or serial number.</div>
+        <div v-else-if="state.loading" class="text-muted py-4 text-center">Tracing...</div>
+        <div v-else-if="!state.batches.length && !state.shipments.length" class="text-muted py-4 text-center">No batch or shipped serial number matches "{{ state.last }}".</div>
+        <template v-else>
+            <div class="sa-kpis">
+                <div class="sa-kpi"><span>Batches found</span><b>{{ state.batches.length }}</b></div>
+                <div class="sa-kpi" :class="{ bad: state.totalShipped > 0 }"><span>Units shipped</span><b>{{ methods.n(state.totalShipped) }}</b></div>
+                <div class="sa-kpi" :class="{ bad: state.customers.length > 0 }"><span>Customers to contact</span><b>{{ state.customers.length }}</b></div>
+                <div class="sa-kpi"><span>Still in the warehouse</span><b>{{ methods.n(state.totalRemaining) }}</b></div>
+            </div>
+
+            <div v-if="state.batches.length">
+                <div class="small fw-bold text-uppercase text-muted mb-1">Batches</div>
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead><tr><th>Batch</th><th>Product</th><th>Warehouse</th><th>Expires</th><th class="text-end">Shipped</th><th class="text-end">In warehouse</th></tr></thead>
+                        <tbody><tr v-for="b in state.batches" :key="b.batchId">
+                            <td class="fw-semibold">{{ b.batchNumber }}</td><td>{{ b.productName }} <small class="text-muted">{{ b.productNumber }}</small></td>
+                            <td>{{ b.warehouseName }}</td><td>{{ b.expiryDate ? methods.day(b.expiryDate) : '-' }}</td>
+                            <td class="text-end">{{ methods.n(b.shipped) }}</td><td class="text-end">{{ methods.n(b.remaining) }}</td>
+                        </tr></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="small fw-bold text-uppercase text-muted mb-1">Customers who received it</div>
+            <div class="table-responsive mb-3">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>Customer</th><th>Phone</th><th>Email</th><th>Address</th><th class="text-end">Units</th><th class="text-end">Deliveries</th><th>Last delivery</th></tr></thead>
+                    <tbody>
+                        <tr v-if="!state.customers.length"><td colspan="7" class="text-muted text-center py-3">Nothing has been shipped from these batches or serial numbers.</td></tr>
+                        <tr v-for="c in state.customers" :key="c.customerId || c.customerName">
+                            <td class="fw-semibold">{{ c.customerName }}</td><td>{{ c.phone }}</td><td>{{ c.email }}</td><td class="small">{{ c.address }}</td>
+                            <td class="text-end">{{ methods.n(c.quantity) }}</td><td class="text-end">{{ c.deliveries }}</td><td>{{ c.lastDelivery ? methods.day(c.lastDelivery) : '-' }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="small fw-bold text-uppercase text-muted mb-1">Shipments</div>
+            <div class="table-responsive mb-3">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>Delivery</th><th>Date</th><th>Customer</th><th>Product</th><th>Batch / serial</th><th class="text-end">Qty</th></tr></thead>
+                    <tbody><tr v-for="(s, i) in state.shipments" :key="i">
+                        <td class="fw-semibold">{{ s.deliveryOrderNumber }} <span v-if="s.deliveryStatus === 'Draft'" class="badge bg-secondary">Draft</span></td>
+                        <td>{{ s.deliveryDate ? methods.day(s.deliveryDate) : '-' }}</td><td>{{ s.customerName }}</td><td>{{ s.productName }}</td>
+                        <td>{{ s.batchNumber || s.serialNumber }}</td><td class="text-end">{{ methods.n(s.quantity) }}</td>
+                    </tr></tbody>
+                </table>
+            </div>
+
+            <div v-if="state.unlinked.length" class="rt-warn">
+                <div class="fw-bold mb-1"><i class="fas fa-exclamation-triangle me-1"></i> {{ state.unlinked.length }} other deliveries of the same product have no batch recorded</div>
+                <div class="small mb-2">They went out after the batch was registered, and the pick did not say which batch they came from. They may include units from this batch, so check them before you close the recall.</div>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead><tr><th>Delivery</th><th>Date</th><th>Customer</th><th>Product</th><th class="text-end">Qty</th></tr></thead>
+                        <tbody><tr v-for="(u, i) in state.unlinked" :key="i"><td>{{ u.deliveryOrderNumber }}</td><td>{{ u.deliveryDate ? methods.day(u.deliveryDate) : '-' }}</td><td>{{ u.customerName }}</td><td>{{ u.productName }}</td><td class="text-end">{{ methods.n(u.quantity) }}</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </template>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .rt-search { display: flex; gap: .6rem; margin-bottom: 1rem; }
+        .sa-kpis { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: .8rem; margin-bottom: 1rem; }
+        .sa-kpi { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: .7rem .9rem; }
+        .sa-kpi span { display: block; font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+        .sa-kpi b { font-size: 1.4rem; color: var(--ink); } .sa-kpi.bad b { color: var(--bad); }
+        .rt-warn { border: 1px solid var(--warn); border-radius: 12px; padding: .8rem 1rem; background: var(--surface-2); }
+        @@media (max-width: 991px) { .sa-kpis { grid-template-columns: 1fr 1fr; } }
+    </style>
+    <script src="~/FrontEnd/Pages/Products/RecallTrace.cshtml.js"></script>
+}

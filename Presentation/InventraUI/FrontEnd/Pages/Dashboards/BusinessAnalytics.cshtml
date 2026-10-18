@@ -1,0 +1,317 @@
+﻿@page
+@model InventraUI.FrontEnd.Pages.Dashboards.BusinessAnalyticsModel
+@attribute [Authorize]
+@{
+    ViewData["Title"] = "Business analytics";
+    ViewData["HideHead"] = true;
+}
+
+<link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+<style>
+.mw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem;margin-bottom:1.5rem}
+.mw-card{background:var(--surface,#fff);border:1px solid var(--border,#e5e7eb);border-radius:14px;padding:1rem;box-shadow:var(--shadow)}
+.mw-head{display:flex;align-items:center;gap:.6rem;margin-bottom:.8rem}
+.mw-head h6{margin:0;font-weight:700;flex:1}
+.mw-head i{color:var(--primary)}
+.mw-open{font-size:.8rem}
+.mw-metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:.6rem}
+.mw-metric{display:flex;flex-direction:column;padding:.6rem .7rem;border-radius:10px;background:var(--surface-2,#f4f6f8);border-left:4px solid #94a3b8;text-decoration:none!important;color:inherit}
+.mw-metric:hover{filter:brightness(.97)}
+.mw-val{font-size:1.45rem;font-weight:800;line-height:1.1}
+.mw-lbl{font-size:.75rem;opacity:.75}
+.mw-metric.tone-bad{border-left-color:#dc2626}.mw-metric.tone-bad .mw-val{color:#dc2626}
+.mw-metric.tone-warn{border-left-color:#f59e0b}.mw-metric.tone-warn .mw-val{color:#b45309}
+.mw-metric.tone-good{border-left-color:#16a34a}
+.mw-metric.tone-info{border-left-color:#0ea5e9}
+</style>
+
+<section class="hero">
+    <h2 id="heroGreeting">Business analytics</h2>
+    <p>Here is what needs your attention today.</p>
+    <div class="hero-actions" id="heroActions"></div>
+</section>
+
+<div id="app" v-cloak>
+    <div class="form-card" id="formcard">
+        <template v-if="state.canFull">
+        <!-- ===== Analytics ===== -->
+        <div class="an-wrap">
+            <div class="an-bar">
+                <h5><i class="fas fa-chart-line me-2" style="color:var(--primary)"></i>Business analytics</h5>
+                <div class="an-seg" role="group" aria-label="Period">
+                    <button type="button" v-for="d in [7, 30, 90]" :key="d" :class="{ on: state.analyticsDays === d }" @@click="methods.setAnalyticsDays(d)">{{ d }} days</button>
+                </div>
+            </div>
+
+            <div v-if="state.analyticsLoading && !state.analytics" class="an-grid an-kpis">
+                <div class="an-skel" v-for="n in 4" :key="n"></div>
+            </div>
+            <div v-else-if="!state.analytics" class="an-card an-empty">Analytics are not available right now.</div>
+
+            <template v-else>
+                <div class="an-grid an-kpis">
+                    <div class="an-card kpi" style="--kc:var(--primary)">
+                        <div class="kpi-label">Revenue</div>
+                        <div class="kpi-value">{{ analytics.money(state.analytics.revenue.current) }}</div>
+                        <div class="kpi-foot"><span class="delta" :class="analytics.deltaClass(state.analytics.revenue.changePercent)">{{ analytics.deltaText(state.analytics.revenue.changePercent) }}</span> vs previous {{ state.analytics.days }} days</div>
+                    </div>
+                    <div class="an-card kpi" style="--kc:var(--amber)">
+                        <div class="kpi-label">Orders</div>
+                        <div class="kpi-value">{{ analytics.money(state.analytics.orders.current) }}</div>
+                        <div class="kpi-foot"><span class="delta" :class="analytics.deltaClass(state.analytics.orders.changePercent)">{{ analytics.deltaText(state.analytics.orders.changePercent) }}</span> avg order {{ analytics.money(state.analytics.averageOrderValue.current) }}</div>
+                    </div>
+                    <div class="an-card kpi" style="--kc:#4f7cff">
+                        <div class="kpi-label">Purchase spend</div>
+                        <div class="kpi-value">{{ analytics.money(state.analytics.spend.current) }}</div>
+                        <div class="kpi-foot"><span class="delta inv" :class="analytics.deltaClass(state.analytics.spend.changePercent)">{{ analytics.deltaText(state.analytics.spend.changePercent) }}</span> vs previous {{ state.analytics.days }} days</div>
+                    </div>
+                    <div class="an-card kpi" style="--kc:var(--good)">
+                        <div class="kpi-label">Net flow</div>
+                        <div class="kpi-value" :style="{ color: analytics.net() < 0 ? 'var(--bad)' : '' }">{{ analytics.net() < 0 ? '-' : '' }}{{ analytics.money(Math.abs(analytics.net())) }}</div>
+                        <div class="kpi-foot">sales minus purchases</div>
+                    </div>
+                </div>
+
+                <div class="an-grid an-main">
+                    <div class="an-card">
+                        <h6>
+                            Sales vs purchases
+                            <span class="chart-legend"><span><i style="background:var(--primary)"></i>Sales</span><span><i style="background:var(--amber)"></i>Purchases</span></span>
+                        </h6>
+                        <svg class="trend-svg" viewBox="0 0 640 260" @@mouseleave="state.hoverIdx = -1">
+                            <g v-for="g in analytics.grid()" :key="g.y">
+                                <line class="gridl" x1="44" :x2="640" :y1="g.y" :y2="g.y"></line>
+                                <text x="0" :y="g.y + 3">{{ g.label }}</text>
+                            </g>
+                            <path :d="analytics.area('sales')" fill="var(--primary)" opacity=".13"></path>
+                            <path :d="analytics.line('sales')" fill="none" stroke="var(--primary)" stroke-width="2.4" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
+                            <path :d="analytics.line('purchases')" fill="none" stroke="var(--amber)" stroke-width="2" stroke-dasharray="5 4" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
+                            <g v-for="t in analytics.ticks()" :key="t.x"><text :x="t.x" y="254" text-anchor="middle">{{ t.label }}</text></g>
+                            <line v-if="state.hoverIdx >= 0" :x1="analytics.x(state.hoverIdx)" :x2="analytics.x(state.hoverIdx)" y1="8" y2="232" stroke="var(--muted)" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"></line>
+                            <rect v-for="(d, i) in state.analytics.daily" :key="i" class="hit" :x="analytics.x(i) - analytics.step() / 2" y="0" :width="analytics.step()" height="240" @@mousemove="state.hoverIdx = i"></rect>
+                        </svg>
+                        <div class="trend-tip">
+                            <span v-if="state.hoverIdx >= 0"><strong>{{ state.analytics.daily[state.hoverIdx].date }}</strong> &nbsp; Sales <strong style="color:var(--primary)">{{ analytics.money(state.analytics.daily[state.hoverIdx].sales) }}</strong> &nbsp; Purchases <strong style="color:var(--amber)">{{ analytics.money(state.analytics.daily[state.hoverIdx].purchases) }}</strong></span>
+                            <span v-else class="text-muted">Hover the chart for daily values.</span>
+                        </div>
+                        <div class="trend-foot">
+                            <span>Projected sales, next 7 days <b>{{ analytics.money(state.analytics.projectedSalesNext7Days) }}</b></span>
+                            <span>Based on the recent daily average</span>
+                        </div>
+                    </div>
+
+                    <div class="an-card">
+                        <h6>Inventory health</h6>
+                        <div class="ring-wrap">
+                            <div class="ring" :style="{ '--v': state.analytics.healthScore, '--c': analytics.healthColor() }">
+                                <div class="ring-in"><div><b>{{ state.analytics.healthScore }}</b><small>{{ analytics.healthLabel() }}</small></div></div>
+                            </div>
+                            <div class="mini-stats">
+                                <div>Low stock <b>{{ state.insights ? state.insights.lowStockCount : '-' }}</b></div>
+                                <div>Out of stock <b>{{ state.insights ? state.insights.outOfStockCount : '-' }}</b></div>
+                                <div>Dead stock <b>{{ state.analytics.deadStockProducts }}</b></div>
+                                <div>Dead stock value <b>{{ analytics.money(state.analytics.deadStockValue) }}</b></div>
+                            </div>
+                        </div>
+                        <h6 class="mt-4">Open drafts</h6>
+                        <div class="pipe">
+                            <a href="/SalesOrders/SalesOrderList"><div><div class="pl">Sales drafts</div><div class="pv">{{ state.analytics.draftSalesOrders }}</div></div><div class="pa">{{ analytics.money(state.analytics.draftSalesAmount) }}<br>waiting to confirm</div></a>
+                            <a href="/PurchaseOrders/PurchaseOrderList"><div><div class="pl">Purchase drafts</div><div class="pv">{{ state.analytics.draftPurchaseOrders }}</div></div><div class="pa">{{ analytics.money(state.analytics.draftPurchaseAmount) }}<br>waiting to confirm</div></a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="an-grid an-row3">
+                    <div class="an-card">
+                        <h6><span><i class="fas fa-lightbulb me-1" style="color:var(--amber)"></i> Smart insights</span><small>{{ state.analytics.insights.length }}</small></h6>
+                        <div class="insight" :class="i.level" v-for="(i, idx) in state.analytics.insights" :key="idx">
+                            <i class="fas ii" :class="analytics.insightIcon(i.level)"></i>
+                            <div style="flex:1;min-width:0">
+                                <div class="it">{{ i.title }}</div>
+                                <div class="id">{{ i.detail }}</div>
+                            </div>
+                            <a v-if="i.link" :href="i.link">{{ i.linkText || 'Open' }} &rarr;</a>
+                        </div>
+                    </div>
+                    <div class="an-card">
+                        <h6>Top products <small>by revenue</small></h6>
+                        <div v-if="!state.analytics.topProducts.length" class="an-empty">No confirmed sales in this period.</div>
+                        <ul class="rank" v-else>
+                            <li v-for="p in state.analytics.topProducts" :key="p.name">
+                                <div class="rtop"><span class="rname">{{ p.name }}</span><strong>{{ analytics.money(p.amount) }}</strong></div>
+                                <div class="bar"><span :style="{ width: analytics.pct(p.amount, state.analytics.topProducts[0].amount) + '%' }"></span></div>
+                                <div class="rsub">{{ analytics.money(p.units) }} units &middot; {{ p.sharePercent }}% of sales</div>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="an-card">
+                        <h6>Top customers <small>by revenue</small></h6>
+                        <div v-if="!state.analytics.topCustomers.length" class="an-empty">No confirmed sales in this period.</div>
+                        <ul class="rank" v-else>
+                            <li v-for="c in state.analytics.topCustomers" :key="c.name">
+                                <div class="rtop"><span class="rname">{{ c.name }}</span><strong>{{ analytics.money(c.amount) }}</strong></div>
+                                <div class="bar"><span :style="{ width: analytics.pct(c.amount, state.analytics.topCustomers[0].amount) + '%' }"></span></div>
+                                <div class="rsub">{{ c.sub }} &middot; {{ c.sharePercent }}% of sales</div>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="an-grid an-row3" style="margin-bottom:0">
+                    <div class="an-card" style="grid-column: span 3">
+                        <h6>ABC stock classification <small>A = top 80% of stock value, B = next 15%, C = last 5%</small></h6>
+                        <div class="abc-wrap">
+                            <div class="donut" :style="{ background: analytics.donut() }"><div class="donut-in"></div></div>
+                            <div class="abc-list">
+                                <div v-for="b in state.analytics.abc" :key="b.class"><span><i :style="{ background: analytics.abcColor(b.class) }"></i>Class {{ b.class }} &middot; {{ b.products }} product(s)</span><b>{{ analytics.money(b.value) }} ({{ b.sharePercent }}%)</b></div>
+                            </div>
+                            <div class="an-empty" style="max-width:340px">Focus counting, security and reorder attention on Class A products; they hold most of your money.</div>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <div class="an-section-title">Inventory &amp; operations</div>
+        <div class="an-wrap" v-if="state.insights">
+            <div class="an-grid an-kpis">
+                <div class="an-card stat stat-lg" style="--sc:#0b7f72"><span class="stat-ico"><i class="fas fa-coins"></i></span><div><div class="stat-l">Inventory value</div><div class="stat-v">{{ insights.money(state.insights.inventoryValue) }}</div><div class="stat-s">{{ state.insights.totalSkus }} physical products</div></div></div>
+                <div class="an-card stat stat-lg" style="--sc:#e08a00"><span class="stat-ico"><i class="fas fa-exclamation-triangle"></i></span><div><div class="stat-l">Low stock</div><div class="stat-v" :style="{ color: state.insights.lowStockCount > 0 ? 'var(--warn)' : '' }">{{ state.insights.lowStockCount }}</div><div class="stat-s">at or below reorder point</div></div></div>
+                <div class="an-card stat stat-lg" style="--sc:#d93f45"><span class="stat-ico"><i class="fas fa-box-open"></i></span><div><div class="stat-l">Out of stock</div><div class="stat-v" :style="{ color: state.insights.outOfStockCount > 0 ? 'var(--bad)' : '' }">{{ state.insights.outOfStockCount }}</div><div class="stat-s">with a reorder point, no stock</div></div></div>
+                <div class="an-card stat stat-lg" style="--sc:#4f7cff"><span class="stat-ico"><i class="fas fa-exchange-alt"></i></span><div><div class="stat-l">Last 14 days</div><div class="stat-v"><span style="color:var(--good)">+{{ insights.num(state.insights.unitsInPeriod) }}</span> <span class="text-muted">/</span> <span style="color:var(--bad)">-{{ insights.num(state.insights.unitsOutPeriod) }}</span></div><div class="stat-s">units in / out</div></div></div>
+            </div>
+
+            <div class="an-grid an-main">
+                <div class="an-card">
+                    <h6>Stock movement, last 14 days <span class="chart-legend"><span><i style="background:var(--good)"></i>In</span><span><i style="background:var(--bad)"></i>Out</span></span></h6>
+                    <div class="mv">
+                        <div v-for="d in state.insights.dailyMovement" :key="d.date" class="mv-col">
+                            <div class="mv-bars">
+                                <div class="mv-bar in" :style="{ height: insights.barHeight(d.unitsIn) + 'px' }" :title="d.date + ': ' + insights.num(d.unitsIn) + ' in'"></div>
+                                <div class="mv-bar out" :style="{ height: insights.barHeight(d.unitsOut) + 'px' }" :title="d.date + ': ' + insights.num(d.unitsOut) + ' out'"></div>
+                            </div>
+                            <div class="mv-d">{{ d.date }}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="an-card">
+                    <h6>Top 5 products by stock value</h6>
+                    <div v-if="!state.insights.topValueItems.length" class="an-empty">No stock on hand yet.</div>
+                    <ul class="rank" v-else>
+                        <li v-for="t in state.insights.topValueItems" :key="t.productName">
+                            <div class="rtop"><span class="rname">{{ t.productName }}</span><strong>{{ insights.money(t.value) }}</strong></div>
+                            <div class="bar"><span :style="{ width: insights.valuePct(t.value) + '%' }"></span></div>
+                            <div class="rsub">{{ insights.num(t.stock) }} units</div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="an-grid an-one">
+                <div class="an-card">
+                    <div class="an-head">
+                        <h6>Reorder alerts</h6>
+                        <span class="d-flex align-items-center" style="gap:.6rem">
+                            <a href="/PurchaseOrders/ReorderSuggestions" class="btn btn-sm btn-primary" v-if="state.insights.lowStockItems.length"><i class="fas fa-cart-plus me-1"></i> Create reorder PO</a>
+                            <a class="an-link" href="/Products/ProductList">Set reorder points <i class="fas fa-arrow-right"></i></a>
+                        </span>
+                    </div>
+                    <div v-if="!state.insights.lowStockItems.length" class="an-ok"><i class="fas fa-check-circle"></i> Nothing to reorder right now. Set a <em>Reorder Point</em> on products to get alerts here.</div>
+                    <div class="table-responsive" v-else>
+                        <table class="table align-middle mb-0">
+                            <thead><tr><th>Product</th><th class="text-end">On hand</th><th class="text-end">Reorder point</th><th class="text-end">Suggested order</th><th>Status</th></tr></thead>
+                            <tbody>
+                                <tr v-for="i in state.insights.lowStockItems" :key="i.productId">
+                                    <td><div class="fw-semibold">{{ i.productName }}</div><small class="text-muted">{{ i.productNumber }}</small></td>
+                                    <td class="text-end">{{ insights.num(i.stock) }}</td>
+                                    <td class="text-end">{{ insights.num(i.reorderPoint) }}</td>
+                                    <td class="text-end">{{ i.reorderQuantity ? insights.num(i.reorderQuantity) : '-' }}</td>
+                                    <td><span class="badge" :class="i.stock <= 0 ? 'bg-danger' : 'bg-warning text-dark'">{{ i.stock <= 0 ? 'Out of stock' : 'Low' }}</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="an-wrap pt-0">
+            <div class="an-grid an-stats">
+                <div class="an-card stat" style="--sc:#e5484d"><span class="stat-ico"><i class="fas fa-chart-line"></i></span><div><div class="stat-l">Sales</div><div class="stat-v"><span ref="cardSalesQtyRef"></span> <small>qty</small></div></div></div>
+                <div class="an-card stat" style="--sc:#f5a524"><span class="stat-ico"><i class="fas fa-undo-alt"></i></span><div><div class="stat-l">Sales return</div><div class="stat-v"><span ref="cardSalesReturnQtyRef"></span> <small>qty</small></div></div></div>
+                <div class="an-card stat" style="--sc:#0b7f72"><span class="stat-ico"><i class="fas fa-shopping-cart"></i></span><div><div class="stat-l">Purchase</div><div class="stat-v"><span ref="cardPurchaseQtyRef"></span> <small>qty</small></div></div></div>
+                <div class="an-card stat" style="--sc:#9a9b2f"><span class="stat-ico"><i class="fas fa-undo"></i></span><div><div class="stat-l">Purchase return</div><div class="stat-v"><span ref="cardPurchaseReturnQtyRef"></span> <small>qty</small></div></div></div>
+                <div class="an-card stat" style="--sc:#4f7cff"><span class="stat-ico"><i class="fas fa-truck"></i></span><div><div class="stat-l">Delivery order</div><div class="stat-v"><span ref="cardDeliveryOrderQtyRef"></span> <small>qty</small></div></div></div>
+                <div class="an-card stat" style="--sc:#17a589"><span class="stat-ico"><i class="fas fa-boxes"></i></span><div><div class="stat-l">Goods receive</div><div class="stat-v"><span ref="cardGoodsReceiveQtyRef"></span> <small>qty</small></div></div></div>
+                <div class="an-card stat" style="--sc:#e08a00"><span class="stat-ico"><i class="fas fa-sign-out-alt"></i></span><div><div class="stat-l">Transfer out</div><div class="stat-v"><span ref="cardTransferOutQtyRef"></span> <small>qty</small></div></div></div>
+                <div class="an-card stat" style="--sc:#8b5cf6"><span class="stat-ico"><i class="fas fa-sign-in-alt"></i></span><div><div class="stat-l">Transfer in</div><div class="stat-v"><span ref="cardTransferInQtyRef"></span> <small>qty</small></div></div></div>
+            </div>
+
+            <div class="an-grid an-two">
+                <div class="an-card"><div class="an-head"><h6>Sales by customer group</h6><a class="an-link" href="/SalesReports/SalesReportList">Sales report <i class="fas fa-arrow-right"></i></a></div><div class="an-chart" ref="customerGroupChartRef"></div></div>
+                <div class="an-card"><div class="an-head"><h6>Purchase by vendor group</h6><a class="an-link" href="/PurchaseReports/PurchaseReportList">Purchase report <i class="fas fa-arrow-right"></i></a></div><div class="an-chart" ref="vendorGroupChartRef"></div></div>
+                <div class="an-card"><div class="an-head"><h6>Sales by customer category</h6><a class="an-link" href="/SalesReports/SalesReportList">Sales report <i class="fas fa-arrow-right"></i></a></div><div class="an-chart" ref="customerCategoryChartRef"></div></div>
+                <div class="an-card"><div class="an-head"><h6>Purchase by vendor category</h6><a class="an-link" href="/PurchaseReports/PurchaseReportList">Purchase report <i class="fas fa-arrow-right"></i></a></div><div class="an-chart" ref="vendorCategoryChartRef"></div></div>
+            </div>
+
+            <div class="an-grid an-two">
+                <div class="an-card"><div class="an-head"><h6>Latest sales</h6><a class="an-link" href="/SalesOrders/SalesOrderList">All sales <i class="fas fa-arrow-right"></i></a></div><div class="an-gridbox" ref="salesOrderGridRef"></div></div>
+                <div class="an-card"><div class="an-head"><h6>Latest purchases</h6><a class="an-link" href="/PurchaseOrders/PurchaseOrderList">All purchases <i class="fas fa-arrow-right"></i></a></div><div class="an-gridbox" ref="purchaseOrderGridRef"></div></div>
+            </div>
+
+            <div class="an-grid an-one">
+                <div class="an-card"><div class="an-head"><h6>Stock by warehouse</h6><a class="an-link" href="/StockReports/StockReportList">Stock report <i class="fas fa-arrow-right"></i></a></div><div class="an-chart" ref="stockChartRef"></div></div>
+            </div>
+
+            <div class="an-grid an-one" style="margin-bottom:1.5rem">
+                <div class="an-card"><div class="an-head"><h6>Inventory transactions</h6><a class="an-link" href="/TransactionReports/TransactionReportList">All transactions <i class="fas fa-arrow-right"></i></a></div><div class="an-gridbox" ref="inventoryTransactionGridRef"></div></div>
+            </div>
+        </div>
+        </template>
+    </div>
+</div>
+
+@section scripts {
+    <script src="~/js/charts.js" asp-append-version="true"></script>
+    <script src="~/FrontEnd/Pages/Dashboards/BusinessAnalytics.cshtml.js"></script>
+    <script>
+        (function () {
+            try {
+                var h = new Date().getHours();
+                var part = h < 12 ? 'Good morning' : (h < 17 ? 'Good afternoon' : 'Good evening');
+                var email = (window.StorageManager && StorageManager.getEmail && StorageManager.getEmail()) || '';
+                var name = email ? email.split('@@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); }) : '';
+                var roles = (StorageManager.getUserRoles() || []).map(function (r) { return String(r).toLowerCase(); });
+                var box = document.getElementById('heroActions');
+                var isAdmin = roles.indexOf('administrator') >= 0 || roles.indexOf('users') >= 0;
+                var sub = document.querySelector('.hero p');
+                var h2 = document.getElementById('heroGreeting');
+                if (isAdmin) {
+                    if (h2) h2.textContent = part + (name ? ', ' + name : '');
+                    if (sub) sub.textContent = 'Here is what needs your attention today.';
+                    var links = [
+                        ['/Users/UserList', 'fa-users', 'Users'],
+                        ['/Roles/RoleList', 'fa-user-shield', 'Roles'],
+                        ['/Users/Permissions', 'fa-key', 'Permissions'],
+                        ['/Users/Approvals', 'fa-check-double', 'Approvals'],
+                        ['/Users/AuditLog', 'fa-history', 'Audit log'],
+                        ['/Users/SmtpSettings', 'fa-envelope-open-text', 'Email settings'],
+                        ['/Dashboards/AdminDashboard', 'fa-heartbeat', 'System overview']
+                    ];
+                    box.innerHTML = links.map(function (l, i) {
+                        return '<a class="btn btn-hero' + (i === 0 ? ' main' : '') + '" href="' + l[0] + '"><i class="fas ' + l[1] + '"></i>' + l[2] + '</a>';
+                    }).join('');
+                } else {
+                    box.innerHTML = '<a class="btn btn-hero main" href="/Dashboards/DefaultDashboard"><i class="fas fa-arrow-left"></i>My dashboard</a>';
+                    if (sub) sub.textContent = 'Revenue, purchases, stock and operations over time.';
+                }
+                if (location.search.indexOf('denied=1') >= 0) {
+                    var d = document.createElement('div');
+                    d.className = 'alert alert-warning'; d.style.margin = '1rem 1.5rem';
+                    d.textContent = 'You do not have access to that page. Ask an administrator if you need it.';
+                    var app = document.getElementById('app'); app.parentNode.insertBefore(d, app);
+                }
+            } catch (e) { }
+        })();
+    </script>
+}

@@ -1,0 +1,92 @@
+@page
+@attribute [Authorize(Roles = "StockReports")]
+@{
+    ViewData["Title"] = "Costing & Landed Cost";
+}
+
+<div id="app" v-cloak>
+    <div class="an-card" style="margin:1rem 1.5rem">
+        <div class="an-head">
+            <h6><i class="fas fa-coins me-2" style="color:var(--primary)"></i>Costing &amp; landed cost <small>what your stock cost you, by average cost and FIFO</small></h6>
+            <div class="ap-tabs">
+                <button v-for="t in state.tabs" :key="t.key" type="button" class="ap-tab" :class="{ on: state.tab === t.key }" @@click="state.tab = t.key">{{ t.label }}</button>
+            </div>
+        </div>
+
+        <div v-if="state.loading" class="text-muted py-4">Loading...</div>
+
+        <div v-else-if="state.tab === 'valuation'">
+            <div class="cs-tiles">
+                <div><span>Stock value (average cost)</span><b>{{ methods.n(state.totalAvg) }}</b></div>
+                <div><span>Stock value (FIFO)</span><b>{{ methods.n(state.totalFifo) }}</b></div>
+                <div><span>Difference</span><b :class="state.totalFifo - state.totalAvg < 0 ? 'text-danger' : ''">{{ methods.n(state.totalFifo - state.totalAvg) }}</b></div>
+                <div><span>Products</span><b>{{ state.rows.length }}</b></div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-2">
+                <input type="search" class="form-control form-control-sm" style="max-width:320px" v-model="state.search" placeholder="Search product or group">
+                <button type="button" class="btn btn-sm btn-outline-primary" :disabled="!state.rows.length" @@click="handler.exportCsv()"><i class="fas fa-download me-1"></i> Download CSV</button>
+            </div>
+            <div class="small text-muted mb-2">Receipts cost what the purchase order said plus their share of landed costs. A <span class="badge bg-warning text-dark">Estimated</span> product has stock that came in without a purchase (for example opening stock), so its selling price was used as the cost.</div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Product</th><th>Group</th><th class="text-end">On hand</th><th class="text-end">Avg cost</th><th class="text-end">Avg value</th><th class="text-end">FIFO cost</th><th class="text-end">FIFO value</th><th class="text-end">Price</th><th class="text-end">Margin</th></tr></thead>
+                    <tbody>
+                        <tr v-if="!methods.rows().length"><td colspan="9" class="text-muted">Nothing to show yet.</td></tr>
+                        <tr v-for="r in methods.rows()" :key="r.productId">
+                            <td>{{ r.productName }} <small class="text-muted">{{ r.productNumber }}</small> <span v-if="r.estimated" class="badge bg-warning text-dark">Estimated</span></td>
+                            <td>{{ r.groupName }}</td><td class="text-end">{{ methods.n(r.onHand) }}</td>
+                            <td class="text-end">{{ methods.n(r.averageCost) }}</td><td class="text-end">{{ methods.n(r.averageValue) }}</td>
+                            <td class="text-end">{{ methods.n(r.fifoCost) }}</td><td class="text-end">{{ methods.n(r.fifoValue) }}</td>
+                            <td class="text-end">{{ methods.n(r.sellingPrice) }}</td>
+                            <td class="text-end"><b v-if="r.marginPercent != null" :class="r.marginPercent < 10 ? 'text-danger' : 'text-success'">{{ methods.n(r.marginPercent) }}%</b><span v-else>-</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div v-else>
+            <div class="small text-muted mb-2">Add freight, duty or insurance to a goods receipt. The amount is shared over the receipt's products and raises their cost. Choose "by value" to share in proportion to purchase value, or "by units" to share evenly per unit.</div>
+            <div class="cs-form">
+                <div class="cs-wide"><label>Goods receipt</label>
+                    <select class="form-select form-select-sm" v-model="state.form.receiptId"><option value="">Choose...</option><option v-for="r in state.receipts" :key="r.id" :value="r.id">{{ r.number }} &middot; {{ r.vendor || 'No vendor' }} &middot; {{ methods.day(r.receiveDate) }}</option></select></div>
+                <div class="cs-wide"><label>Cost</label><input class="form-control form-control-sm" v-model="state.form.description" placeholder="e.g. Sea freight" maxlength="255"></div>
+                <div><label>Amount</label><input type="number" min="0" step="any" class="form-control form-control-sm text-end" v-model.number="state.form.amount"></div>
+                <div><label>Share</label><select class="form-select form-select-sm" v-model="state.form.basis"><option value="Value">By value</option><option value="Quantity">By units</option></select></div>
+                <div class="align-self-end"><button type="button" class="btn btn-sm btn-primary" :disabled="state.busy" @@click="handler.save()"><i class="fas fa-plus me-1"></i> Add cost</button></div>
+            </div>
+            <div class="table-responsive mt-3">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Receipt</th><th>Vendor</th><th class="text-end">Goods value</th><th class="text-end">Landed costs</th><th>Costs</th></tr></thead>
+                    <tbody>
+                        <tr v-for="r in state.receipts" :key="r.id">
+                            <td class="fw-semibold">{{ r.number }}<br><small class="text-muted">{{ methods.day(r.receiveDate) }}</small></td><td>{{ r.vendor }}</td>
+                            <td class="text-end">{{ methods.n(r.goodsValue) }}</td><td class="text-end">{{ methods.n(r.landedTotal) }}</td>
+                            <td><span v-for="c in r.costs" :key="c.id" class="cs-chip">{{ c.description }}: {{ methods.n(c.amount) }} ({{ c.basis === 'Quantity' ? 'units' : 'value' }}) <a href="#" @@click.prevent="handler.remove(c)" title="Remove"><i class="fas fa-times"></i></a></span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .ap-tabs { display: flex; gap: .4rem; }
+        .ap-tab { border: 1px solid var(--line); background: var(--surface); color: inherit; border-radius: 999px; padding: .25rem .9rem; font-size: .8rem; cursor: pointer; }
+        .ap-tab.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+        .cs-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .8rem; margin-bottom: 1rem; }
+        .cs-tiles > div { border: 1px solid var(--line); border-radius: 12px; padding: .7rem 1rem; background: var(--surface-2); }
+        .cs-tiles span { display: block; font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+        .cs-tiles b { font-size: 1.35rem; }
+        .cs-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .7rem; }
+        .cs-wide { grid-column: span 2; }
+        .cs-form label { display: block; font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: .2rem; }
+        .cs-chip { display: inline-block; border: 1px solid var(--line); background: var(--surface-2); border-radius: 999px; padding: .1rem .6rem; font-size: .78rem; margin: .1rem .25rem .1rem 0; }
+        .cs-chip a { color: var(--muted); margin-left: .3rem; }
+        @@media (max-width: 767px) { .cs-wide { grid-column: auto; } }
+    </style>
+    <script src="~/FrontEnd/Pages/StockReports/Costing.cshtml.js"></script>
+}

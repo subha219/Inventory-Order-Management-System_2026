@@ -1,0 +1,100 @@
+@page
+@attribute [Authorize(Roles = "Warehouses")]
+@{
+    ViewData["Title"] = "Dock Schedule";
+}
+
+<div id="app" v-cloak>
+    <div class="dk-layout">
+        <div>
+            <div class="an-card">
+                <div class="an-head"><h6><i class="fas fa-truck-loading me-2" style="color:var(--primary)"></i>Truck appointments</h6></div>
+                <div class="d-flex flex-wrap gap-2 align-items-end mb-3">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @@click="handler.shift(-1)"><i class="fas fa-chevron-left"></i></button>
+                    <input type="date" class="form-control form-control-sm" style="max-width:170px" v-model="state.day" @@change="handler.fetch()">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @@click="handler.shift(1)"><i class="fas fa-chevron-right"></i></button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @@click="handler.today()">Today</button>
+                    <span class="ms-auto small text-muted">{{ state.appts.length }} on this day<span v-if="lateCount"> &middot; <b class="text-danger">{{ lateCount }} late</b></span></span>
+                </div>
+                <div v-if="state.loading" class="text-muted small">Loading...</div>
+                <div v-else-if="!state.doors.length" class="text-muted small">Add your dock doors first (right side), then book trucks.</div>
+                <div v-for="d in state.doors" :key="d.id" class="dk-door" v-show="d.isActive || methods.forDoor(d.id).length">
+                    <div class="dk-door-h"><b>{{ d.name }}</b> <small class="text-muted">{{ d.warehouseName }} &middot; {{ d.doorType }}</small><span v-if="!d.isActive" class="badge bg-secondary ms-2">inactive</span></div>
+                    <div v-if="!methods.forDoor(d.id).length" class="text-muted small">No trucks booked.</div>
+                    <div v-for="a in methods.forDoor(d.id)" :key="a.id" class="dk-appt" :class="[a.status, { late: a.late }]">
+                        <div class="dk-time">{{ methods.time(a.startAtUtc) }}<br><small>{{ a.durationMinutes }} min</small></div>
+                        <div class="flex-grow-1">
+                            <div><b>{{ a.carrier || 'Carrier not set' }}</b> <span class="badge" :class="a.direction === 'Inbound' ? 'bg-info' : 'bg-warning text-dark'">{{ a.direction }}</span> <span class="badge" :class="methods.badge(a)">{{ a.late ? 'Late' : a.status }}</span></div>
+                            <small class="text-muted">{{ a.number }}<span v-if="a.reference"> &middot; {{ a.reference }}</span><span v-if="a.partyName"> &middot; {{ a.partyName }}</span><span v-if="a.checkedInAtUtc"> &middot; arrived {{ methods.time(a.checkedInAtUtc) }}</span></small>
+                            <div v-if="a.notes" class="small">{{ a.notes }}</div>
+                        </div>
+                        <div class="dk-actions">
+                            <button v-if="a.status === 'Scheduled'" class="btn btn-sm btn-success" @@click="handler.act(a, 'CheckIn')">Check in</button>
+                            <button v-if="a.status === 'CheckedIn'" class="btn btn-sm btn-success" @@click="handler.act(a, 'Complete')">Complete</button>
+                            <button v-if="a.status === 'Scheduled'" class="btn btn-sm btn-outline-primary" @@click="handler.edit(a)">Edit</button>
+                            <button v-if="a.status === 'Scheduled'" class="btn btn-sm btn-outline-secondary" @@click="handler.act(a, 'NoShow')">No-show</button>
+                            <button v-if="a.status === 'Scheduled' || a.status === 'CheckedIn'" class="btn btn-sm btn-outline-danger" @@click="handler.act(a, 'Cancel')">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <div class="an-card">
+                <div class="an-head"><h6>{{ state.form.id ? 'Change appointment' : 'Book a truck' }}</h6></div>
+                <div class="dk-form">
+                    <div><label class="dk-label">Dock door</label><select class="form-select form-select-sm" v-model="state.form.doorId"><option value="">Choose...</option><option v-for="d in state.doors.filter(x => x.isActive)" :key="d.id" :value="d.id">{{ d.name }} ({{ d.warehouseName }})</option></select></div>
+                    <div><label class="dk-label">Direction</label><select class="form-select form-select-sm" v-model="state.form.direction"><option>Inbound</option><option>Outbound</option></select></div>
+                    <div><label class="dk-label">Arrival</label><input type="datetime-local" class="form-control form-control-sm" v-model="state.form.start"></div>
+                    <div><label class="dk-label">Minutes</label><input type="number" min="5" step="5" class="form-control form-control-sm" v-model.number="state.form.minutes"></div>
+                    <div><label class="dk-label">Carrier</label><input class="form-control form-control-sm" v-model="state.form.carrier" maxlength="200"></div>
+                    <div><label class="dk-label">Reference (PO / order no.)</label><input class="form-control form-control-sm" v-model="state.form.reference" maxlength="200"></div>
+                    <div class="dk-wide"><label class="dk-label">Vendor / customer</label><input class="form-control form-control-sm" v-model="state.form.party" maxlength="200"></div>
+                    <div class="dk-wide"><label class="dk-label">Notes</label><input class="form-control form-control-sm" v-model="state.form.notes" maxlength="500"></div>
+                </div>
+                <div class="d-flex gap-2 mt-3">
+                    <button type="button" class="btn btn-sm btn-primary" :disabled="state.busy" @@click="handler.save()"><i class="fas fa-calendar-check me-1"></i> {{ state.form.id ? 'Save changes' : 'Book' }}</button>
+                    <button v-if="state.form.id" type="button" class="btn btn-sm btn-outline-secondary" @@click="handler.resetForm()">Cancel edit</button>
+                </div>
+                <div class="small text-muted mt-2">A door cannot be double booked. Scheduled trucks more than 15 minutes past their time show as late.</div>
+            </div>
+
+            <div class="an-card mt-3">
+                <div class="an-head"><h6>Dock doors</h6></div>
+                <div v-for="d in state.doors" :key="d.id" class="d-flex align-items-center gap-2 mb-1">
+                    <span class="flex-grow-1">{{ d.name }} <small class="text-muted">{{ d.warehouseName }} &middot; {{ d.doorType }}<span v-if="!d.isActive"> &middot; inactive</span></small></span>
+                    <button class="btn btn-sm btn-outline-secondary" @@click="handler.toggleDoor(d)">{{ d.isActive ? 'Disable' : 'Enable' }}</button>
+                    <button class="btn btn-sm btn-outline-danger" @@click="handler.removeDoor(d)"><i class="fas fa-times"></i></button>
+                </div>
+                <hr>
+                <div class="dk-form">
+                    <div><label class="dk-label">Door name</label><input class="form-control form-control-sm" v-model="state.door.name" maxlength="100" placeholder="Dock 1"></div>
+                    <div><label class="dk-label">Warehouse</label><select class="form-select form-select-sm" v-model="state.door.warehouseId"><option value="">Choose...</option><option v-for="w in state.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select></div>
+                    <div><label class="dk-label">Handles</label><select class="form-select form-select-sm" v-model="state.door.type"><option>Both</option><option>Inbound</option><option>Outbound</option></select></div>
+                    <div class="align-self-end"><button class="btn btn-sm btn-primary" @@click="handler.addDoor()"><i class="fas fa-plus me-1"></i> Add door</button></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .dk-layout { display: grid; grid-template-columns: 1fr minmax(300px, 400px); gap: 1rem; margin: 1rem 1.5rem; align-items: start; }
+        .dk-label { display: block; font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: .2rem; }
+        .dk-form { display: grid; grid-template-columns: repeat(2, 1fr); gap: .6rem; }
+        .dk-wide { grid-column: span 2; }
+        .dk-door { border: 1px solid var(--line); border-radius: 10px; padding: .6rem .8rem; margin-bottom: .7rem; background: var(--surface); }
+        .dk-door-h { margin-bottom: .4rem; }
+        .dk-appt { display: flex; gap: .8rem; align-items: flex-start; padding: .5rem; border-radius: 8px; background: var(--surface-2); margin-bottom: .4rem; border-left: 4px solid var(--primary); flex-wrap: wrap; }
+        .dk-appt.CheckedIn { border-left-color: #16a34a; }
+        .dk-appt.Completed, .dk-appt.Cancelled, .dk-appt.NoShow { opacity: .6; border-left-color: var(--line); }
+        .dk-appt.late { border-left-color: #dc2626; }
+        .dk-time { min-width: 62px; font-weight: 700; }
+        .dk-actions { display: flex; gap: .3rem; flex-wrap: wrap; }
+        @@media (max-width: 991px) { .dk-layout { grid-template-columns: 1fr; } }
+    </style>
+    <script src="~/FrontEnd/Pages/Warehouses/DockSchedule.cshtml.js"></script>
+}

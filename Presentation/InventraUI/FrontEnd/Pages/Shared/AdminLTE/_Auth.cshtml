@@ -1,0 +1,94 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>@ViewData["Title"]</title>
+
+    <!-- Google Font: Source Sans Pro -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="~/adminlte/plugins/fontawesome-free/css/all.min.css">
+    <!-- icheck bootstrap -->
+    <link rel="stylesheet" href="~/adminlte/plugins/icheck-bootstrap/icheck-bootstrap.min.css">
+    <!-- Theme style -->
+    <link rel="stylesheet" href="~/adminlte/css/adminlte.min.css">
+
+    <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+    <link href="~/css/modern.css" rel="stylesheet" asp-append-version="true" />
+    <script>
+        // Apply the saved theme before first paint (no flash). Toggle lives in the top bar.
+        (function () {
+            var dark = false;
+            try { dark = localStorage.getItem('whms-theme') === 'dark'; } catch (e) { }
+            var root = document.documentElement;
+            root.setAttribute('data-theme', dark ? 'dark' : 'light');
+            root.classList.toggle('dark-mode', dark);
+            
+        })();
+    </script>
+    @await RenderSectionAsync("styles", required: false)
+
+    
+    <style>
+        [v-cloak] {
+            display: none !important;
+        }
+    </style>
+
+    @* vue *@
+    <script src="~/lib/vue/vue.global.prod.js"></script>
+
+    <!-- JavaScript Libraries -->
+    <script src="~/lib/bootstrap/dist/js/bootstrap.min.js" defer></script>
+    <script src="~/lib/axios/axios.min.js" defer></script>
+    <script src="~/lib/sweetalert/sweetalert2v11.js" defer></script>
+    <script src="~/lib/inventra/storage-manager.js" defer></script>
+    <script src="~/lib/inventra/security-manager.js" defer></script>
+    <script src="~/lib/inventra/axios-manager.js" defer></script>
+
+
+</head>
+<body class="hold-transition login-page">
+    <div class="auth-shell">
+        <section class="auth-hero" aria-hidden="false">
+            <div class="auth-brand"><i class="fas fa-warehouse"></i> Inventra</div>
+            <div>
+                <h1>Every pallet, shelf and order in one place.</h1>
+                <p class="lead-text">Stock levels, purchasing and deliveries for your warehouse, on your desk or in your pocket.</p>
+                <ul class="auth-points">
+                    <li><span class="pt-icon"><i class="fas fa-bell"></i></span> Low-stock alerts before you run out</li>
+                    <li><span class="pt-icon"><i class="fas fa-barcode"></i></span> Scan barcodes with any phone</li>
+                    <li><span class="pt-icon"><i class="fas fa-file-invoice"></i></span> Draft purchase orders in one click</li>
+                </ul>
+                <div class="rack" aria-hidden="true">
+                    <div class="shelf"><i style="--w:22%;--h:70%"></i><i class="amber" style="--w:16%;--h:88%"></i><i style="--w:28%;--h:62%"></i><i class="teal" style="--w:18%;--h:80%"></i><i style="--w:12%;--h:55%"></i></div>
+                    <div class="shelf"><i class="teal" style="--w:30%;--h:76%"></i><i style="--w:20%;--h:90%"></i><i style="--w:14%;--h:58%"></i><i class="amber" style="--w:24%;--h:72%"></i></div>
+                    <div class="shelf"><i style="--w:18%;--h:84%"></i><i style="--w:26%;--h:66%"></i><i class="amber" style="--w:14%;--h:78%"></i><i style="--w:30%;--h:60%"></i></div>
+                </div>
+            </div>
+            <div class="auth-foot">Warehouse &amp; Inventory Management System</div>
+        </section>
+        <main class="auth-main">
+            <div class="login-box">
+                <div class="login-logo">
+                    <a asp-area="" asp-page="/Index"><b>Inventra</b> Warehouse &amp; Inventory</a>
+                </div>
+                <div class="card">
+                    @RenderBody()
+                    <!-- /.login-card-body -->
+                </div>
+            </div>
+        </main>
+    </div>
+    <!-- /.login-box -->
+    <!-- jQuery -->
+    <script src="~/adminlte/plugins/jquery/jquery.min.js"></script>
+    <!-- Bootstrap 4 -->
+    <script src="~/adminlte/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <!-- AdminLTE App -->
+    <script src="~/adminlte/js/adminlte.min.js"></script>
+
+     @await RenderSectionAsync("scripts", required: false)
+</body>
+</html>

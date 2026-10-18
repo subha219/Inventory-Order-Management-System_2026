@@ -1,0 +1,88 @@
+@page
+@attribute [Authorize(Roles = "Warehouses")]
+@{
+    ViewData["Title"] = "Receiving";
+}
+
+<div id="app" v-cloak>
+    <div class="pk-layout">
+        <div class="an-card">
+            <div class="an-head"><h6><i class="fas fa-truck-loading me-2" style="color:var(--primary)"></i>Goods receipts <small>to inspect and put away</small></h6></div>
+            <input type="search" class="form-control form-control-sm mb-2" v-model="state.search" placeholder="Search number or vendor">
+            <div v-if="state.loading" class="text-muted small py-3">Loading...</div>
+            <div v-else-if="!methods.receipts().length" class="text-muted small py-3">No confirmed goods receipts.</div>
+            <button v-for="r in methods.receipts()" :key="r.id" type="button" class="pk-order" :class="{ on: state.selected === r.id }" @@click="handler.select(r.id)">
+                <div class="d-flex justify-content-between"><b>{{ r.number }}</b><span class="badge" :class="methods.badge(r)">{{ methods.label(r) }}</span></div>
+                <small class="text-muted">{{ r.vendor || 'No vendor' }} &middot; {{ methods.day(r.receiveDate) }}</small>
+                <div class="pk-bar"><i :style="{ width: methods.pct(r) + '%' }"></i></div>
+            </button>
+        </div>
+
+        <div class="an-card">
+            <div v-if="!state.selected" class="text-muted py-5 text-center">Choose a goods receipt on the left to inspect the goods and put them into storage locations.</div>
+            <template v-else>
+                <div class="an-head">
+                    <h6>{{ methods.current()?.number }} <small>{{ state.warehouseName || '' }}</small></h6>
+                    <div>
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1" :disabled="state.saving" @@click="handler.saveInspection()"><i class="fas fa-clipboard-check me-1"></i> Save inspection</button>
+                        <button type="button" class="btn btn-sm btn-primary" :disabled="state.saving || !methods.total()" @@click="handler.confirmPutAway()"><i class="fas fa-check me-1"></i> Put away ({{ methods.n(methods.total()) }} units)</button>
+                    </div>
+                </div>
+
+                <div v-for="l in state.lines" :key="l.productId" class="pk-line">
+                    <div class="d-flex justify-content-between flex-wrap">
+                        <div><b>{{ l.productName }}</b> <small class="text-muted">{{ l.productNumber }}</small></div>
+                        <div class="small">Received {{ methods.n(l.received) }} &middot; put away {{ methods.n(l.putAway) }} &middot; <b :class="l.remaining > 0 ? 'text-warning' : 'text-success'">{{ methods.n(l.remaining) }} to put away</b></div>
+                    </div>
+
+                    <div class="rc-insp">
+                        <span class="rc-tag" :class="l.inspected ? (l.failed > 0 ? 'bad' : 'good') : ''">{{ l.inspected ? 'Inspected: ' + l.result : 'Not inspected' }}</span>
+                        <label>Passed <input type="number" min="0" step="any" class="form-control form-control-sm text-end" v-model.number="state.insp[l.productId].passed"></label>
+                        <label>Failed <input type="number" min="0" step="any" class="form-control form-control-sm text-end" v-model.number="state.insp[l.productId].failed"></label>
+                        <label class="rc-reason">Reason for rejects <input type="text" class="form-control form-control-sm" v-model="state.insp[l.productId].reason" placeholder="Damaged, wrong item, expired..."></label>
+                    </div>
+
+                    <div v-if="l.remaining <= 0" class="small text-success mt-2"><i class="fas fa-check-circle me-1"></i>{{ l.putAway > 0 ? 'Everything that passed has been put away' : 'Nothing is allowed to be put away' }}</div>
+                    <table v-else class="table table-sm mb-0 mt-2">
+                        <thead><tr><th>Location</th><th>Zone</th><th class="text-end">Already holds</th><th class="text-end">Room left</th><th class="text-end" style="width:130px">Put away</th></tr></thead>
+                        <tbody>
+                            <tr v-if="!l.locations.length"><td colspan="5" class="text-muted">No active location with free room in this warehouse. Create one on the Storage Locations page.</td></tr>
+                            <tr v-for="s in l.locations" :key="s.locationId">
+                                <td class="fw-semibold">{{ s.code }}</td><td>{{ s.zone }}</td><td class="text-end">{{ methods.n(s.holdsProduct) }}</td>
+                                <td class="text-end">{{ s.free == null ? 'No limit' : methods.n(s.free) }}</td>
+                                <td><input type="number" min="0" step="any" class="form-control form-control-sm text-end" v-model.number="state.qty[l.productId + '|' + s.locationId]"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div v-if="state.history.length" class="mt-3">
+                    <div class="small fw-bold text-uppercase text-muted mb-1">Already put away</div>
+                    <table class="table table-sm mb-0">
+                        <tbody><tr v-for="(h, i) in state.history" :key="i"><td class="text-nowrap">{{ methods.when(h.at) }}</td><td>{{ h.productName }}</td><td>{{ h.locationCode }}</td><td class="text-end">{{ methods.n(h.quantity) }}</td><td>{{ methods.user(h.userId) }}</td></tr></tbody>
+                    </table>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .pk-layout { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; gap: 1rem; margin: 1rem 1.5rem; align-items: start; }
+        .pk-order { display: block; width: 100%; text-align: left; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 10px; padding: .6rem .8rem; margin-bottom: .5rem; cursor: pointer; }
+        .pk-order.on { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(11,127,114,.18); }
+        .pk-bar { height: 5px; border-radius: 4px; background: var(--line); margin-top: .4rem; overflow: hidden; }
+        .pk-bar i { display: block; height: 100%; background: var(--primary); }
+        .pk-line { border: 1px solid var(--line); border-radius: 12px; padding: .8rem 1rem; margin-bottom: .8rem; background: var(--surface-2); }
+        .rc-insp { display: flex; flex-wrap: wrap; gap: .8rem; align-items: flex-end; margin-top: .6rem; }
+        .rc-insp label { font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+        .rc-insp input { width: 100px; text-transform: none; }
+        .rc-insp .rc-reason { flex: 1 1 200px; } .rc-insp .rc-reason input { width: 100%; }
+        .rc-tag { font-size: .75rem; font-weight: 700; padding: .2rem .6rem; border-radius: 999px; background: var(--line); color: var(--muted); align-self: center; }
+        .rc-tag.good { background: rgba(25,135,84,.15); color: var(--good); } .rc-tag.bad { background: rgba(220,53,69,.15); color: var(--bad); }
+        @@media (max-width: 991px) { .pk-layout { grid-template-columns: 1fr; } }
+    </style>
+    <script src="~/FrontEnd/Pages/Warehouses/PutAway.cshtml.js"></script>
+}

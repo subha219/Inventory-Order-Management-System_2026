@@ -1,0 +1,27 @@
+@page
+@model InventraUI.FrontEnd.Pages.Dashboards.MyDashboardModel
+@attribute [Authorize]
+@{
+    ViewData["Title"] = "My dashboard";
+    ViewData["HideHead"] = true;
+}
+
+<link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+<link href="~/css/persona.css" rel="stylesheet" asp-append-version="true" />
+
+<partial name="_PersonaBody" />
+
+@section scripts {
+    <script>
+        window.PERSONA = {
+            title: 'My dashboard',
+            subtitle: 'Welcome. Use the menu on the left to get started.',
+            showUsers: false,
+            tiles: [
+            { title: 'My profile', text: 'Your details, password and picture', icon: 'fa-user', link: '/Profiles/MyProfile' },
+            { title: 'Todos', text: 'Your personal to-do list', icon: 'fa-check-square', link: '/Todos/TodoList' }
+            ]
+        };
+    </script>
+    <script src="~/js/persona-dashboard.js" asp-append-version="true"></script>
+}

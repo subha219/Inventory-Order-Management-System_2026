@@ -1,0 +1,82 @@
+@page
+@attribute [Authorize(Roles = "Warehouses")]
+@{
+    ViewData["Title"] = "Wave Picking";
+}
+
+<div id="app" v-cloak>
+    <div class="pk-layout">
+        <div class="an-card">
+            <div class="an-head"><h6><i class="fas fa-layer-group me-2" style="color:var(--primary)"></i>New wave <small>pick several orders in one walk</small></h6></div>
+            <div v-if="state.loading" class="text-muted small py-3">Loading...</div>
+            <div v-else-if="!state.available.length" class="text-muted small py-2">No open delivery orders waiting to be picked.</div>
+            <template v-else>
+                <label class="small d-block mb-1"><input type="checkbox" class="form-check-input me-1" :checked="state.chosen.length === state.available.length" @@change="handler.toggleAll($event.target.checked)"> Select all ({{ state.available.length }})</label>
+                <div class="wv-orders">
+                    <label v-for="o in state.available" :key="o.id" class="wv-order"><input type="checkbox" class="form-check-input" :value="o.id" v-model="state.chosen">
+                        <span><b>{{ o.number }}</b> <small class="text-muted">{{ o.customer || 'No customer' }} &middot; {{ methods.day(o.deliveryDate) }}</small><br><small>{{ methods.n(o.remaining) }} units to pick</small></span></label>
+                </div>
+                <input class="form-control form-control-sm mt-2" v-model="state.notes" placeholder="Note (optional)" maxlength="500">
+                <button type="button" class="btn btn-sm btn-primary mt-2 w-100" :disabled="state.busy || !state.chosen.length" @@click="handler.create()"><i class="fas fa-plus me-1"></i> Create wave from {{ state.chosen.length }} order(s)</button>
+            </template>
+
+            <div class="small fw-bold text-uppercase text-muted mt-3 mb-1">Waves</div>
+            <button v-for="w in state.waves" :key="w.id" type="button" class="pk-order" :class="{ on: state.selected === w.id }" @@click="handler.select(w.id)">
+                <div class="d-flex justify-content-between"><b>{{ w.number }}</b><span class="badge" :class="methods.badge(w.status)">{{ w.status }}</span></div>
+                <small class="text-muted">{{ w.orders }} order(s) &middot; {{ methods.when(w.createdAtUtc) }}<span v-if="w.notes"> &middot; {{ w.notes }}</span></small>
+            </button>
+            <div v-if="!state.waves.length" class="text-muted small">No waves yet.</div>
+        </div>
+
+        <div class="an-card">
+            <div v-if="!state.selected" class="text-muted py-5 text-center">Choose or create a wave to see the combined pick sheet.</div>
+            <template v-else>
+                <div class="an-head">
+                    <h6>{{ state.waveNumber }} <small>{{ state.waveStatus }}</small></h6>
+                    <div v-if="state.waveStatus === 'Open'" class="d-flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="!state.rows.length" @@click="handler.print()"><i class="fas fa-print me-1"></i> Print sheet</button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" @@click="handler.cancel()">Cancel wave</button>
+                        <button type="button" class="btn btn-sm btn-primary" :disabled="state.busy || !methods.total()" @@click="handler.confirm()"><i class="fas fa-check me-1"></i> Confirm pick ({{ methods.n(methods.total()) }} units)</button>
+                    </div>
+                </div>
+
+                <div class="small text-muted mb-2">Orders in this wave: <span v-for="o in state.orders" :key="o.id" class="wv-chip">{{ o.number }} <small>({{ methods.n(o.picked) }}/{{ methods.n(o.needed) }})</small></span></div>
+                <div v-if="state.shortfalls.length" class="alert alert-warning py-2 small"><b>Not enough stock in locations:</b> <span v-for="(s, i) in state.shortfalls" :key="i">{{ s.orderNumber }} needs {{ methods.n(s.short) }} more {{ s.productName }}{{ i !== state.shortfalls.length - 1 ? '; ' : '' }}</span></div>
+                <div v-if="state.waveStatus !== 'Open'" class="text-muted small">This wave is {{ state.waveStatus }}.</div>
+
+                <div v-for="z in methods.zones()" :key="z.zone" class="pk-line">
+                    <div><i class="fas fa-map-marker-alt me-1" style="color:var(--primary)"></i><b>Zone {{ z.zone }}</b> <small class="text-muted">{{ z.rows.length }} stop(s)</small></div>
+                    <table class="table table-sm align-middle mb-0 mt-2">
+                        <thead><tr><th>Location</th><th>Product</th><th>For orders</th><th class="text-end">In stock</th><th class="text-end" style="width:120px">Pick</th></tr></thead>
+                        <tbody>
+                            <tr v-for="r in z.rows" :key="r.productId + r.locationId">
+                                <td class="fw-semibold">{{ r.code }}</td><td>{{ r.productName }} <small class="text-muted">{{ r.productNumber }}</small></td>
+                                <td class="small">{{ r.allocations.map(a => a.orderNumber + ' x' + methods.n(a.quantity)).join(', ') }}</td>
+                                <td class="text-end">{{ methods.n(r.inStock) }}</td>
+                                <td><input type="number" min="0" :max="r.inStock" step="any" class="form-control form-control-sm text-end" v-model.number="state.qty[r.productId + '|' + r.locationId]"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div v-if="state.waveStatus === 'Open'" class="small text-muted mt-2">Picking by batch is not part of waves. For batch-tracked products use the normal Pick List.</div>
+            </template>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .pk-layout { display: grid; grid-template-columns: minmax(280px, 360px) 1fr; gap: 1rem; margin: 1rem 1.5rem; align-items: start; }
+        .pk-order { display: block; width: 100%; text-align: left; border: 1px solid var(--line); background: var(--surface); color: inherit; border-radius: 10px; padding: .6rem .8rem; margin-bottom: .5rem; cursor: pointer; }
+        .pk-order.on { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-tint); }
+        .pk-line { border: 1px solid var(--line); border-radius: 12px; padding: .8rem 1rem; margin-bottom: .8rem; background: var(--surface-2); }
+        .wv-orders { position: relative; max-height: 280px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: .3rem; }
+        .wv-order { display: flex; gap: .5rem; align-items: flex-start; padding: .35rem .4rem; border-radius: 8px; cursor: pointer; font-size: .86rem; }
+        .wv-order .form-check-input { position: static; margin: .2rem 0 0; }
+        .wv-order:hover { background: var(--primary-tint); }
+        .wv-chip { display: inline-block; border: 1px solid var(--line); background: var(--surface-2); border-radius: 999px; padding: .05rem .6rem; margin: 0 .25rem .25rem 0; }
+        @@media (max-width: 991px) { .pk-layout { grid-template-columns: 1fr; } }
+    </style>
+    <script src="~/FrontEnd/Pages/Warehouses/WavePicking.cshtml.js"></script>
+}

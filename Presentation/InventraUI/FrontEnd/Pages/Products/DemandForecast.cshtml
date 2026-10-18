@@ -1,0 +1,113 @@
+@page
+@attribute [Authorize(Roles = "Products")]
+@{
+    ViewData["Title"] = "Demand Forecast";
+}
+
+<style>
+    .fc-controls { display: grid; grid-template-columns: repeat(3, minmax(130px, 1fr)) auto minmax(220px, 1.3fr); gap: 1rem; align-items: end; margin-bottom: 1.25rem; padding: 1rem; border: 1px solid var(--bs-border-color, #dfe6ee); border-radius: 12px; background: rgba(11,127,114,.04); }
+    .fc-controls .fc-field { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
+    .fc-controls .form-label { display: block; margin: 0; font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #6b7c8f; }
+    .fc-controls .form-select, .fc-controls .form-control { width: 100%; height: 42px; }
+    .fc-controls .btn { height: 42px; white-space: nowrap; }
+    .fc-table th, .fc-table td { vertical-align: middle !important; }
+    .fc-table th.fc-check, .fc-table td.fc-check { width: 40px; text-align: center; }
+    .fc-table .form-check-input { margin: 0 !important; vertical-align: middle; float: none; position: static; }
+    .fc-table th small { font-weight: 500; text-transform: none; letter-spacing: 0; }
+    .fc-pair { display: inline-flex; align-items: center; justify-content: flex-end; gap: .45rem; }
+    .fc-now { min-width: 1.4rem; text-align: right; color: #8a99aa; }
+    .fc-arrow { color: #aab6c3; font-size: .8rem; }
+    .fc-table input.fc-input { width: 84px; height: 34px; text-align: right; padding: 0 .5rem; border-radius: 8px; font-weight: 600; }
+    .fc-table tbody tr.fc-selected { background: rgba(11,127,114,.07); }
+    @@media (max-width: 991px) { .fc-controls { grid-template-columns: 1fr 1fr; } .fc-controls .fc-wide { grid-column: 1 / -1; } }
+</style>
+
+<div id="app" v-cloak>
+    <div class="card">
+        <div class="card-header"><h5 class="mb-0"><i class="fas fa-chart-line me-1"></i> Demand forecast &amp; smart reorder levels</h5></div>
+        <div class="card-body">
+            <p class="text-muted small">
+                Built from your confirmed delivery orders. The forecast blends the overall and the recent sales rate, so rising or falling demand is picked up.
+                Recommended reorder point = forecast demand during the supplier lead time + safety stock for your service level.
+                Review the numbers, tick the products, and apply them to the product records.
+            </p>
+
+            <div class="fc-controls">
+                <div class="fc-field">
+                    <label class="form-label">History (days)</label>
+                    <select class="form-select" v-model.number="state.lookbackDays">
+                        <option :value="30">30</option><option :value="60">60</option><option :value="90">90</option>
+                        <option :value="180">180</option><option :value="365">365</option>
+                    </select>
+                </div>
+                <div class="fc-field">
+                    <label class="form-label">Lead time (days)</label>
+                    <input type="number" min="1" max="120" class="form-control" v-model.number="state.leadTimeDays">
+                </div>
+                <div class="fc-field">
+                    <label class="form-label">Service level</label>
+                    <select class="form-select" v-model.number="state.serviceLevel">
+                        <option :value="90">90%</option><option :value="95">95%</option>
+                        <option :value="98">98%</option><option :value="99">99%</option>
+                    </select>
+                </div>
+                <div class="fc-field">
+                    <button type="button" class="btn btn-outline-primary" @@click="handler.load" :disabled="state.loading">
+                        <i class="fas fa-calculator me-1"></i> Calculate
+                    </button>
+                </div>
+                <div class="fc-field fc-wide">
+                    <button type="button" class="btn btn-primary" @@click="handler.apply" :disabled="state.saving || selectedCount === 0">
+                        <i class="fas fa-check me-1"></i> Apply to {{ selectedCount }} product{{ selectedCount === 1 ? '' : 's' }}
+                    </button>
+                </div>
+            </div>
+
+            <div v-if="state.loading" class="text-muted">Calculating...</div>
+            <div v-else-if="state.items.length === 0" class="alert alert-info mb-0">
+                No confirmed delivery orders found in this period, so there is nothing to forecast yet.
+            </div>
+            <div v-else class="table-responsive">
+                <table class="table table-hover align-middle fc-table">
+                    <thead>
+                        <tr>
+                            <th class="fc-check"><input type="checkbox" class="form-check-input" :checked="allSelected" @@change="handler.toggleAll($event.target.checked)"></th>
+                            <th>Product</th>
+                            <th class="text-end">Stock</th>
+                            <th class="text-end">Avg / day</th>
+                            <th class="text-end">Trend</th>
+                            <th class="text-end">Next 30 days</th>
+                            <th class="text-end">Days of cover</th>
+                            <th class="text-end">Reorder point<br><small class="text-muted">now &rarr; suggested</small></th>
+                            <th class="text-end">Reorder qty<br><small class="text-muted">now &rarr; suggested</small></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="r in state.items" :key="r.productId" :class="{ 'fc-selected': r.selected }">
+                            <td class="fc-check"><input type="checkbox" class="form-check-input" v-model="r.selected"></td>
+                            <td><div class="fw-semibold">{{ r.productName }}</div><small class="text-muted">{{ r.productNumber }}</small></td>
+                            <td class="text-end">{{ methods.num(r.stock) }}</td>
+                            <td class="text-end">{{ methods.num(r.avgDaily) }}</td>
+                            <td class="text-end">
+                                <span v-if="r.trendPercent == null" class="text-muted">-</span>
+                                <span v-else :class="r.trendPercent > 0 ? 'text-success' : (r.trendPercent < 0 ? 'text-danger' : '')">
+                                    {{ r.trendPercent > 0 ? '▲' : (r.trendPercent < 0 ? '▼' : '') }} {{ Math.abs(r.trendPercent) }}%
+                                </span>
+                            </td>
+                            <td class="text-end">{{ methods.num(r.forecastNext30Days) }}</td>
+                            <td class="text-end">
+                                <span class="badge" :class="methods.coverClass(r.daysOfCover)">{{ r.daysOfCover == null ? '-' : r.daysOfCover + ' d' }}</span>
+                            </td>
+                            <td class="text-end"><span class="fc-pair"><span class="fc-now">{{ r.currentReorderPoint == null ? '-' : methods.num(r.currentReorderPoint) }}</span><i class="fas fa-long-arrow-alt-right fc-arrow"></i><input type="number" min="0" class="form-control fc-input" v-model.number="r.recommendedReorderPoint"></span></td>
+                            <td class="text-end"><span class="fc-pair"><span class="fc-now">{{ r.currentReorderQuantity == null ? '-' : methods.num(r.currentReorderQuantity) }}</span><i class="fas fa-long-arrow-alt-right fc-arrow"></i><input type="number" min="0" class="form-control fc-input" v-model.number="r.recommendedReorderQuantity"></span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <script src="~/FrontEnd/Pages/Products/DemandForecast.cshtml.js"></script>
+}

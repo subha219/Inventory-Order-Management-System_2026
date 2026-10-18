@@ -1,0 +1,84 @@
+<div id="app" v-cloak>
+    <section class="hero pd-hero">
+        <div class="pd-hero-row">
+            <div>
+                <div class="pd-date">{{ today }}</div>
+                <h2>{{ state.greeting }}</h2>
+                <p>{{ cfg.subtitle }}</p>
+            </div>
+            <div class="pd-hero-side">
+                <span class="pd-updated" v-if="state.updated">Updated {{ state.updated }}</span>
+                <button type="button" class="pd-refresh" :disabled="state.loading" @@click="methods.load()" title="Refresh"><i class="fas fa-sync-alt" :class="{ 'fa-spin': state.loading }"></i> Refresh</button>
+            </div>
+        </div>
+    </section>
+
+    <div class="pd-wrap">
+        <div v-if="state.error" class="pd-error">
+            <i class="fas fa-exclamation-triangle"></i> {{ state.error }}
+            <button type="button" class="pd-link-btn" @@click="methods.load()">Try again</button>
+        </div>
+
+        <!-- Zone 1: headline numbers -->
+        <div class="pd-kpis" v-if="state.loading && !state.kpis.length && !state.people">
+            <div class="pd-skel" v-for="n in 4" :key="n"></div>
+        </div>
+        <div class="pd-kpis" v-else-if="state.kpis.length || state.people">
+            <template v-if="state.people">
+                <a class="pd-kpi tone-good" href="/Users/UserList"><span class="pd-kpi-label">Active users</span><span class="pd-kpi-value">{{ state.people.active }}</span><span class="pd-kpi-note">Can sign in today</span></a>
+                <a class="pd-kpi" :class="state.people.blocked ? 'tone-warn' : 'tone-good'" href="/Users/UserList"><span class="pd-kpi-label">Blocked users</span><span class="pd-kpi-value">{{ state.people.blocked }}</span><span class="pd-kpi-note">Cannot sign in</span></a>
+                <a class="pd-kpi" :class="state.people.unconfirmed ? 'tone-warn' : 'tone-good'" href="/Users/UserList"><span class="pd-kpi-label">E-mail not confirmed</span><span class="pd-kpi-value">{{ state.people.unconfirmed }}</span><span class="pd-kpi-note">Waiting for the confirmation link</span></a>
+            </template>
+            <a class="pd-kpi" v-for="k in state.kpis" :key="k.label" :href="k.link || '#'" :class="k.tone ? 'tone-' + k.tone : ''">
+                <span class="pd-kpi-label">{{ k.label }}</span>
+                <span class="pd-kpi-value">{{ methods.kpiValue(k) }}</span>
+                <span class="pd-kpi-note" v-if="k.note">{{ k.note }}</span>
+                <span class="pd-kpi-spark" v-html="methods.spark(k)"></span>
+            </a>
+        </div>
+
+        <!-- Zone 2: what to do now -->
+        <div class="pd-section" v-if="state.lists.length">
+            <div class="pd-label">What needs doing</div>
+            <div class="pd-lists">
+                <div class="pd-card" v-for="l in state.lists" :key="l.title">
+                    <div class="pd-card-head"><h6>{{ l.title }}</h6><a v-if="l.link" :href="l.link" class="pd-more">View all <i class="fas fa-arrow-right"></i></a></div>
+                    <div v-if="!l.rows.length" class="pd-list-empty"><i class="fas fa-check-circle"></i> {{ l.empty }}</div>
+                    <div v-else class="pd-table-wrap">
+                        <table class="pd-table">
+                            <thead><tr><th v-for="c in l.columns" :key="c">{{ c }}</th></tr></thead>
+                            <tbody>
+                                <tr v-for="(r, i) in l.rows" :key="i" :class="r.tone ? 'row-' + r.tone : ''">
+                                    <td v-for="(cell, j) in r.cells" :key="j"><a v-if="r.link && j === 0" :href="r.link">{{ cell }}</a><template v-else>{{ cell }}</template></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Zone 3: trends -->
+        <div class="pd-section" v-if="state.charts.length">
+            <div class="pd-label">Trends</div>
+            <div class="pd-charts">
+                <div class="pd-card" v-for="c in state.charts" :key="c.title">
+                    <div class="pd-card-head"><h6>{{ c.title }}</h6><a v-if="c.link" :href="c.link" class="pd-more">Details <i class="fas fa-arrow-right"></i></a></div>
+                    <div class="pd-keys" v-html="methods.keys(c)"></div>
+                    <div v-html="methods.chart(c)"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Shortcuts -->
+        <div class="pd-section">
+            <div class="pd-label">Shortcuts</div>
+            <div class="pd-tiles">
+                <a class="pd-tile" v-for="t in cfg.tiles" :key="t.link" :href="t.link">
+                    <span class="pd-ico"><i class="fas" :class="t.icon"></i></span>
+                    <span class="pd-tile-text"><b>{{ t.title }}</b><small>{{ t.text }}</small></span>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>

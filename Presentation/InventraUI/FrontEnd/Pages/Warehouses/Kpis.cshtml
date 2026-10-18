@@ -1,0 +1,50 @@
+@page
+@attribute [Authorize(Roles = "Warehouses")]
+@{
+    ViewData["Title"] = "Operations KPIs";
+}
+
+<div id="app" v-cloak>
+    <div class="an-card" style="margin:1rem 1.5rem">
+        <div class="an-head">
+            <h6><i class="fas fa-tachometer-alt me-2" style="color:var(--primary)"></i>Operations KPIs <small>how the warehouse is performing</small></h6>
+            <select class="form-select form-select-sm" style="width:auto" v-model.number="state.days" @@change="handler.fetch()"><option :value="7">Last 7 days</option><option :value="30">Last 30 days</option><option :value="90">Last 90 days</option><option :value="365">Last 12 months</option></select>
+        </div>
+        <div v-if="state.loading" class="text-muted small py-3">Loading...</div>
+        <template v-else>
+            <div class="kp-grid">
+                <div v-for="k in state.kpis" :key="k.key" class="kp-card" :class="k.tone">
+                    <span>{{ k.label }}</span>
+                    <b>{{ k.value == null ? '-' : methods.n(k.value) }}<small v-if="k.value != null"> {{ k.unit }}</small></b>
+                    <small>{{ k.note }}</small>
+                </div>
+            </div>
+            <h6 class="mt-3">Shipments and receipts per day</h6>
+            <div class="kp-chart">
+                <div v-for="d in state.series" :key="d.date" class="kp-col" :title="d.date + ': ' + d.shipments + ' shipped, ' + d.receipts + ' received'">
+                    <div class="kp-bars"><div class="s" :style="{ height: methods.h(d.shipments) }"></div><div class="r" :style="{ height: methods.h(d.receipts) }"></div></div>
+                    <small v-if="state.series.length <= 31">{{ d.date.slice(8) }}</small>
+                </div>
+            </div>
+            <div class="small text-muted mt-1"><span class="kp-key s"></span> shipped &nbsp; <span class="kp-key r"></span> received</div>
+        </template>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .kp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .8rem; margin-top: .5rem; }
+        .kp-card { border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 10px; padding: .7rem .9rem; background: var(--surface-2); }
+        .kp-card.good { border-left-color: #16a34a; } .kp-card.warn { border-left-color: #d97706; } .kp-card.bad { border-left-color: #dc2626; }
+        .kp-card span { display: block; font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+        .kp-card b { font-size: 1.5rem; } .kp-card b small { font-size: .8rem; color: var(--muted); } .kp-card > small { display: block; color: var(--muted); }
+        .kp-chart { display: flex; align-items: flex-end; gap: 3px; height: 150px; border-bottom: 1px solid var(--line); padding-top: 8px; }
+        .kp-col { flex: 1; min-width: 4px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; }
+        .kp-bars { display: flex; align-items: flex-end; gap: 1px; height: 120px; width: 100%; justify-content: center; }
+        .kp-bars div { width: 45%; min-height: 0; border-radius: 2px 2px 0 0; } .s { background: var(--primary); } .r { background: #16a34a; }
+        .kp-col small { font-size: .6rem; color: var(--muted); }
+        .kp-key { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+    </style>
+    <script src="~/FrontEnd/Pages/Warehouses/Kpis.cshtml.js"></script>
+}

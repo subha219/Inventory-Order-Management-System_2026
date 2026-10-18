@@ -1,0 +1,91 @@
+@page
+@attribute [Authorize(Roles = "Users")]
+@{
+    ViewData["Title"] = "Email Settings";
+}
+
+<div id="app" v-cloak>
+    <div class="an-card" style="margin:1rem 1.5rem; max-width: 980px">
+        <div class="an-head">
+            <h6><i class="fas fa-envelope-open-text me-2" style="color:var(--primary)"></i>Email (SMTP) settings <small>the mail server the system sends reports, alerts and password mails through</small></h6>
+            <span class="sm-badge" :class="state.form.source === 'Not set up' ? 'off' : 'on'">{{ state.form.source === 'Not set up' ? 'Not set up' : 'Using: ' + state.form.source }}</span>
+        </div>
+
+        <div class="sm-help">
+            Fill in the details your mail provider gives you. Common choices: Gmail <code>smtp.gmail.com</code>, port 587 (use an App Password, not your normal password); Microsoft 365 <code>smtp.office365.com</code>, port 587; most other hosts port 587 (STARTTLS) or 465 (SSL).
+            Changes apply at once, no restart needed. The password is stored encrypted and is never shown again.
+        </div>
+
+        <form @@submit.prevent="handler.save()">
+            <div class="row g-3">
+                <div class="col-md-8">
+                    <label class="form-label">Server (host)</label>
+                    <input class="form-control" v-model.trim="state.form.host" placeholder="smtp.yourcompany.com" autocomplete="off">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Port</label>
+                    <input class="form-control" type="number" min="1" max="65535" v-model.number="state.form.port">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">User name</label>
+                    <input class="form-control" v-model.trim="state.form.userName" placeholder="usually your full e-mail address" autocomplete="off">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Password</label>
+                    <input class="form-control" type="password" v-model="state.password" :placeholder="state.form.hasPassword ? 'Saved. Leave empty to keep it' : 'Enter the password'" autocomplete="new-password">
+                    <div class="form-check mt-1" v-if="state.form.hasPassword">
+                        <input class="form-check-input" type="checkbox" id="clearPwd" v-model="state.clearPassword"><label class="form-check-label small" for="clearPwd">Remove the saved password</label>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">From address</label>
+                    <input class="form-control" type="email" v-model.trim="state.form.fromAddress" placeholder="noreply@yourcompany.com" autocomplete="off">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">From name</label>
+                    <input class="form-control" v-model.trim="state.form.fromName" placeholder="Warehouse System" autocomplete="off">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Connection security</label>
+                    <select class="form-select" v-model="state.form.security">
+                        <option value="Auto">Automatic (recommended)</option>
+                        <option value="StartTls">STARTTLS (usually port 587)</option>
+                        <option value="SslOnConnect">SSL / TLS (usually port 465)</option>
+                        <option value="None">None (not encrypted)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="d-flex gap-2 mt-4">
+                <button type="submit" class="btn btn-primary" :disabled="state.busy"><i class="fas fa-save me-1"></i> Save settings</button>
+            </div>
+        </form>
+
+        <hr class="my-4">
+        <div class="sm-test">
+            <h6 class="mb-2"><i class="fas fa-paper-plane me-2" style="color:var(--primary)"></i>Send a test e-mail</h6>
+            <div class="small text-muted mb-2">Uses the saved settings. Save first if you just changed something.</div>
+            <div class="input-group" style="max-width: 560px">
+                <input class="form-control" type="email" v-model.trim="state.testTo" placeholder="you@yourcompany.com">
+                <button type="button" class="btn btn-outline-primary" :disabled="state.busy || !state.testTo" @@click="handler.test()"><i class="fas fa-paper-plane me-1"></i> Send test</button>
+            </div>
+            <div v-if="state.testResult" class="mt-3 sm-result" :class="state.testResult.sent ? 'ok' : 'bad'">
+                <i class="fas" :class="state.testResult.sent ? 'fa-check-circle' : 'fa-exclamation-triangle'"></i> {{ state.testResult.message }}
+            </div>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .sm-help { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: .8rem 1rem; margin-bottom: 1.2rem; font-size: .88rem; }
+        .sm-help code { background: var(--line); padding: 0 .3rem; border-radius: 4px; }
+        .sm-badge { font-size: .78rem; font-weight: 600; border-radius: 999px; padding: .15rem .7rem; border: 1px solid var(--line); }
+        .sm-badge.on { background: rgba(22, 163, 74, .12); color: #15803d; border-color: rgba(22, 163, 74, .35); }
+        .sm-badge.off { background: rgba(245, 158, 11, .14); color: #b45309; border-color: rgba(245, 158, 11, .4); }
+        .sm-result { padding: .7rem 1rem; border-radius: 10px; font-size: .9rem; }
+        .sm-result.ok { background: rgba(22, 163, 74, .1); color: #15803d; }
+        .sm-result.bad { background: rgba(220, 38, 38, .08); color: #b91c1c; }
+    </style>
+    <script src="~/FrontEnd/Pages/Users/SmtpSettings.cshtml.js"></script>
+}

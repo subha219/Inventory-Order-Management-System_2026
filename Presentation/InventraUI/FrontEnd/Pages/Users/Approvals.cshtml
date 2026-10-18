@@ -1,0 +1,59 @@
+@page
+@attribute [Authorize(Roles = "Users")]
+@{
+    ViewData["Title"] = "Approvals";
+}
+
+<div id="app" v-cloak>
+    <div class="an-card" style="margin:1rem 1.5rem">
+        <div class="an-head">
+            <h6><i class="fas fa-check-double me-2" style="color:var(--primary)"></i>Approvals <small>stock adjustments waiting for a decision</small></h6>
+            <div class="ap-tabs">
+                <button v-for="t in state.tabs" :key="t.key" type="button" class="ap-tab" :class="{ on: state.status === t.key }" @@click="handler.setStatus(t.key)">
+                    {{ t.label }}<span v-if="t.key === 'Pending' && state.pendingCount" class="ap-count">{{ state.pendingCount }}</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="small text-muted mb-3" v-if="state.settings.enabled">
+            Adjustments and scrapping that move <b>{{ state.settings.unitsThreshold }}</b> units or more need an approver before they are confirmed.
+            <span v-if="!state.settings.canApprove">You can see requests here, but only an approver can decide them.</span>
+        </div>
+        <div class="small text-muted mb-3" v-else>The approval rule is switched off in settings.</div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead><tr><th>Requested</th><th>Document</th><th class="text-end">Units</th><th>Requested by</th><th>Status</th><th>Decision</th><th></th></tr></thead>
+                <tbody>
+                    <tr v-if="state.loading"><td colspan="7" class="text-center text-muted py-4">Loading...</td></tr>
+                    <tr v-else-if="!state.rows.length"><td colspan="7" class="text-center text-muted py-4">Nothing here.</td></tr>
+                    <tr v-for="r in state.rows" :key="r.id">
+                        <td class="text-nowrap">{{ methods.when(r.requestedAt) }}</td>
+                        <td><div class="fw-semibold">{{ r.entityNumber || r.entityId }}</div><small class="text-muted">{{ methods.type(r.entityType) }}</small></td>
+                        <td class="text-end">{{ methods.n(r.units) }}</td>
+                        <td>{{ methods.user(r.requestedById) }}</td>
+                        <td><span class="badge" :class="methods.badge(r.status)">{{ r.status }}</span></td>
+                        <td class="small"><span v-if="r.decidedById">{{ methods.user(r.decidedById) }}, {{ methods.when(r.decidedAt) }}</span><div class="text-muted" v-if="r.decisionNote">{{ r.decisionNote }}</div></td>
+                        <td class="text-end text-nowrap">
+                            <template v-if="r.status === 'Pending' && state.settings.canApprove">
+                                <button type="button" class="btn btn-sm btn-success me-1" @@click="handler.decide(r, true)">Approve</button>
+                                <button type="button" class="btn btn-sm btn-outline-danger" @@click="handler.decide(r, false)">Reject</button>
+                            </template>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .ap-tabs { display: flex; gap: .4rem; }
+        .ap-tab { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: .25rem .9rem; font-size: .8rem; cursor: pointer; }
+        .ap-tab.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+        .ap-count { display: inline-block; margin-left: .4rem; min-width: 1.2rem; padding: 0 .35rem; border-radius: 999px; background: var(--bad); color: #fff; font-size: .7rem; text-align: center; }
+    </style>
+    <script src="~/FrontEnd/Pages/Users/Approvals.cshtml.js"></script>
+}

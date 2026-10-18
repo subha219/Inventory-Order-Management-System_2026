@@ -1,0 +1,80 @@
+@page
+@attribute [Authorize(Roles = "Warehouses")]
+@{
+    ViewData["Title"] = "Tasks & Labor";
+}
+
+<div id="app" v-cloak>
+    <div class="tk-layout">
+        <div class="an-card">
+            <div class="an-head">
+                <h6><i class="fas fa-tasks me-2" style="color:var(--primary)"></i>Warehouse tasks <small>hand out the floor work and see who is on what</small></h6>
+                <div class="ap-tabs">
+                    <button v-for="t in state.tabs" :key="t.key" type="button" class="ap-tab" :class="{ on: state.tab === t.key }" @@click="state.tab = t.key">{{ t.label }}</button>
+                </div>
+            </div>
+
+            <template v-if="state.tab !== 'people'">
+                <div v-if="state.loading" class="text-muted small">Loading...</div>
+                <div v-else-if="!methods.list().length" class="text-muted small">Nothing here.</div>
+                <div v-for="t in methods.list()" :key="t.id" class="tk-row" :class="[t.priority, { overdue: t.overdue }]">
+                    <div class="tk-main">
+                        <div><b>{{ t.title }}</b> <span class="badge bg-secondary">{{ t.taskType }}</span> <span class="badge" :class="methods.prio(t.priority)">{{ t.priority }}</span> <span class="badge" :class="methods.stat(t.status)">{{ t.status }}</span><span v-if="t.overdue" class="badge bg-danger ms-1">overdue</span></div>
+                        <small class="text-muted">{{ t.number }}<span v-if="t.reference"> &middot; {{ t.reference }}</span><span v-if="t.warehouseName"> &middot; {{ t.warehouseName }}</span> &middot; {{ t.assignedToId ? methods.user(t.assignedToId) : 'Unassigned' }}<span v-if="t.dueAtUtc"> &middot; due {{ methods.when(t.dueAtUtc) }}</span></small>
+                        <div v-if="t.notes" class="small">{{ t.notes }}</div>
+                    </div>
+                    <div class="tk-actions">
+                        <button v-if="t.status === 'Open'" class="btn btn-sm btn-primary" @@click="handler.act(t, 'Start')">Start</button>
+                        <button v-if="t.status === 'Open' || t.status === 'InProgress'" class="btn btn-sm btn-success" @@click="handler.act(t, 'Complete')">Done</button>
+                        <button v-if="t.status === 'Open' || t.status === 'InProgress'" class="btn btn-sm btn-outline-secondary" @@click="handler.edit(t)">Edit</button>
+                        <button v-if="t.status === 'Open' || t.status === 'InProgress'" class="btn btn-sm btn-outline-danger" @@click="handler.act(t, 'Cancel')">Cancel</button>
+                        <button v-if="t.status === 'Done' || t.status === 'Cancelled'" class="btn btn-sm btn-outline-secondary" @@click="handler.act(t, 'Reopen')">Reopen</button>
+                    </div>
+                </div>
+            </template>
+
+            <template v-else>
+                <div class="d-flex align-items-center gap-2 mb-2"><span class="small text-muted">Window</span>
+                    <select class="form-select form-select-sm" style="width:auto" v-model.number="state.days" @@change="handler.fetch()"><option :value="7">7 days</option><option :value="30">30 days</option><option :value="90">90 days</option></select></div>
+                <div v-if="!state.workers.length" class="text-muted small">No finished tasks in this window yet.</div>
+                <table class="table table-sm align-middle" v-else>
+                    <thead><tr><th>Person</th><th class="text-end">Done</th><th class="text-end">Open now</th><th class="text-end">Avg minutes per task</th><th class="text-end">Finished on time</th></tr></thead>
+                    <tbody><tr v-for="w in state.workers" :key="w.userId"><td>{{ methods.user(w.userId) }}</td><td class="text-end"><b>{{ w.done }}</b></td><td class="text-end">{{ w.open }}</td><td class="text-end">{{ w.avgMinutes ?? '-' }}</td><td class="text-end">{{ w.onTimePercent == null ? '-' : w.onTimePercent + '%' }}</td></tr></tbody>
+                </table>
+                <div class="small text-muted">Minutes are measured from Start to Done, so people need to press Start when they begin.</div>
+            </template>
+        </div>
+
+        <div class="an-card">
+            <div class="an-head"><h6>{{ state.form.id ? 'Change task' : 'New task' }}</h6></div>
+            <div class="tk-form">
+                <div class="tk-wide"><label class="tk-label">What needs doing</label><input class="form-control form-control-sm" v-model="state.form.title" maxlength="200" placeholder="Pick wave WAV0004 zone A"></div>
+                <div><label class="tk-label">Type</label><select class="form-select form-select-sm" v-model="state.form.taskType"><option v-for="t in state.types" :key="t" :value="t">{{ t }}</option></select></div>
+                <div><label class="tk-label">Priority</label><select class="form-select form-select-sm" v-model="state.form.priority"><option>Low</option><option>Normal</option><option>High</option><option>Urgent</option></select></div>
+                <div><label class="tk-label">Assign to</label><select class="form-select form-select-sm" v-model="state.form.assignedToId"><option value="">Anyone (first to start)</option><option v-for="u in state.users" :key="u.id" :value="u.id">{{ u.name }}</option></select></div>
+                <div><label class="tk-label">Warehouse</label><select class="form-select form-select-sm" v-model="state.form.warehouseId"><option value="">Any</option><option v-for="w in state.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select></div>
+                <div><label class="tk-label">Due</label><input type="datetime-local" class="form-control form-control-sm" v-model="state.form.due"></div>
+                <div><label class="tk-label">Reference</label><input class="form-control form-control-sm" v-model="state.form.reference" maxlength="100" placeholder="Document or bin"></div>
+                <div class="tk-wide"><label class="tk-label">Notes</label><input class="form-control form-control-sm" v-model="state.form.notes" maxlength="500"></div>
+            </div>
+            <div class="d-flex gap-2 mt-3">
+                <button class="btn btn-sm btn-primary" :disabled="state.busy" @@click="handler.save()"><i class="fas fa-plus me-1"></i> {{ state.form.id ? 'Save changes' : 'Create task' }}</button>
+                <button v-if="state.form.id" class="btn btn-sm btn-outline-secondary" @@click="handler.reset()">Cancel edit</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .tk-layout { display: grid; grid-template-columns: 1fr minmax(300px, 380px); gap: 1rem; margin: 1rem 1.5rem; align-items: start; }
+        .tk-label { display: block; font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: .2rem; }
+        .tk-form { display: grid; grid-template-columns: repeat(2, 1fr); gap: .6rem; } .tk-wide { grid-column: span 2; }
+        .tk-row { display: flex; gap: .8rem; flex-wrap: wrap; justify-content: space-between; padding: .6rem .8rem; margin-bottom: .5rem; border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+        .tk-row.High { border-left-color: #d97706; } .tk-row.Urgent { border-left-color: #dc2626; } .tk-row.Normal { border-left-color: var(--primary); } .tk-row.overdue { background: rgba(220,38,38,.07); }
+        .tk-actions { display: flex; gap: .3rem; flex-wrap: wrap; align-items: flex-start; }
+        @@media (max-width: 991px) { .tk-layout { grid-template-columns: 1fr; } }
+    </style>
+    <script src="~/FrontEnd/Pages/Warehouses/Tasks.cshtml.js"></script>
+}

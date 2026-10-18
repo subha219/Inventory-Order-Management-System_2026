@@ -1,0 +1,49 @@
+﻿@page
+@attribute [Authorize(Roles = "Users")]
+@{
+    ViewData["Title"] = "Role Presets";
+}
+
+<div id="app" v-cloak>
+    <div class="an-card" style="margin:1rem 1.5rem">
+        <div class="an-head">
+            <h6><i class="fas fa-user-tag me-2" style="color:var(--primary)"></i>Role Presets <small>ready-made job roles and test logins</small></h6>
+        </div>
+        <div class="rp-help">
+            Each job below is a real role in the roles table (you can also tick it in Users → Change Roles). Signing in with it opens all the menu areas listed on the card, with the matching dashboard and reports. <b>Create test login</b> makes (or resets) a user such as <code>buyer.test@@example.com</code> with exactly those roles and shows a new password once, so you can sign in and check what that role sees.
+            <b>Apply to user</b> adds the preset roles to an existing person. Log out and back in after a role change so the menu refreshes.
+        </div>
+
+        <div class="rp-grid">
+            <div class="rp-card" v-for="p in state.presets" :key="p.key">
+                <h6>{{ p.name }}</h6>
+                <p>{{ p.description }}</p>
+                <div class="rp-roles"><span v-for="r in p.roles" :key="r" class="rp-chip">{{ r }}</span></div>
+                <div v-if="p.missingRoles.length" class="rp-miss">Not available in this system: {{ p.missingRoles.join(', ') }}</div>
+                <div class="rp-actions">
+                    <button type="button" class="btn btn-sm btn-primary" :disabled="state.busy" @@click="handler.createTest(p)"><i class="fas fa-user-plus me-1"></i> Create test login</button>
+                    <div class="input-group input-group-sm mt-2">
+                        <select class="form-select" v-model="state.target[p.key]"><option value="">Choose a user...</option><option v-for="u in state.users" :key="u.id" :value="u.id">{{ u.email }}</option></select>
+                        <button type="button" class="btn btn-outline-secondary" :disabled="state.busy || !state.target[p.key]" @@click="handler.applyTo(p)">Apply to user</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .rp-help { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: .8rem 1rem; margin-bottom: 1rem; font-size: .88rem; }
+        .rp-help code { background: var(--line); padding: 0 .3rem; border-radius: 4px; }
+        .rp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem; }
+        .rp-card { border: 1px solid var(--line); border-radius: 14px; padding: 1rem; background: var(--surface); }
+        .rp-card h6 { font-weight: 700; margin-bottom: .2rem; }
+        .rp-card p { font-size: .85rem; opacity: .8; }
+        .rp-chip { display: inline-block; border: 1px solid var(--line); background: var(--surface-2); border-radius: 999px; padding: .05rem .55rem; margin: 0 .25rem .25rem 0; font-size: .75rem; }
+        .rp-miss { font-size: .78rem; color: #b45309; margin: .3rem 0; }
+        .rp-actions { margin-top: .7rem; }
+    </style>
+    <script src="~/FrontEnd/Pages/Users/RolePresets.cshtml.js"></script>
+}

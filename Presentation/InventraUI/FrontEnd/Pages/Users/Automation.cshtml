@@ -1,0 +1,56 @@
+@page
+@attribute [Authorize(Roles = "Users")]
+@{
+    ViewData["Title"] = "Automation";
+}
+
+<div id="app" v-cloak>
+    <div class="an-card" style="margin:1rem 1.5rem">
+        <div class="an-head">
+            <h6><i class="fas fa-bell me-2" style="color:var(--primary)"></i>Automation rules <small>get told when something needs attention</small></h6>
+            <button type="button" class="btn btn-sm btn-outline-primary" :disabled="state.running" @@click="handler.runNow()"><i class="fas fa-play me-1"></i> Check now</button>
+        </div>
+        <div class="small text-muted mb-3">The system checks every rule every 15 minutes. Each rule puts one message a day in the bell menu at the top, and can also e-mail people once a day. E-mail needs SmtpSettings to be filled in on the server.</div>
+
+        <div v-if="state.loading" class="text-muted py-4 text-center">Loading...</div>
+        <div v-for="r in state.rules" :key="r.id" class="au-rule" :class="{ off: !r.enabled }">
+            <div class="au-top">
+                <label class="au-switch"><input type="checkbox" v-model="r.enabled"><span></span></label>
+                <div class="flex-grow-1">
+                    <div class="fw-bold">{{ r.name }} <span class="badge" :class="methods.sev(r.severity)">{{ r.severity }}</span></div>
+                    <div class="small text-muted">{{ r.description }}</div>
+                </div>
+                <div class="text-end small text-muted">
+                    <div v-if="r.lastChecked">Checked {{ methods.ago(r.lastChecked) }}</div>
+                    <div v-if="r.lastChecked"><b :class="r.lastCount > 0 ? 'text-warning' : 'text-success'">{{ r.lastCount > 0 ? r.lastCount + ' found' : 'All clear' }}</b></div>
+                </div>
+            </div>
+            <div class="au-fields">
+                <div v-if="r.thresholdUnit"><label>Threshold ({{ r.thresholdUnit }})</label><input type="number" min="0" step="any" class="form-control form-control-sm" v-model.number="r.threshold"></div>
+                <div class="au-check"><label><input type="checkbox" v-model="r.notifyInApp"> Show in the bell menu</label></div>
+                <div class="au-mail"><label>E-mail (optional, separate with commas)</label><input type="text" class="form-control form-control-sm" v-model="r.emailRecipients" placeholder="purchasing@yourcompany.com, manager@yourcompany.com"></div>
+                <div class="text-end"><button type="button" class="btn btn-sm btn-primary" :disabled="state.saving === r.id" @@click="handler.save(r)">Save</button></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .au-rule { border: 1px solid var(--line); border-radius: 12px; padding: .9rem 1rem; margin-bottom: .8rem; background: var(--surface-2); }
+        .au-rule.off { opacity: .6; }
+        .au-top { display: flex; gap: .9rem; align-items: center; margin-bottom: .7rem; }
+        .au-fields { display: grid; grid-template-columns: 150px 190px 1fr 80px; gap: .8rem; align-items: end; }
+        .au-fields label { display: block; font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: .25rem; }
+        .au-check label { text-transform: none; letter-spacing: 0; font-size: .85rem; color: var(--ink); font-weight: 500; margin-bottom: .45rem; }
+        .au-switch { position: relative; width: 42px; height: 24px; flex: 0 0 42px; margin: 0; }
+        .au-switch input { opacity: 0; width: 0; height: 0; }
+        .au-switch span { position: absolute; inset: 0; background: var(--line); border-radius: 999px; cursor: pointer; transition: .2s; }
+        .au-switch span::before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; border-radius: 50%; background: #fff; transition: .2s; }
+        .au-switch input:checked + span { background: var(--primary); }
+        .au-switch input:checked + span::before { transform: translateX(18px); }
+        @@media (max-width: 991px) { .au-fields { grid-template-columns: 1fr 1fr; } .au-top { flex-wrap: wrap; } }
+    </style>
+    <script src="~/FrontEnd/Pages/Users/Automation.cshtml.js"></script>
+}

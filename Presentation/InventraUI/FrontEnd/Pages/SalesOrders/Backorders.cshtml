@@ -1,0 +1,83 @@
+@page
+@attribute [Authorize(Roles = "SalesOrders")]
+@{
+    ViewData["Title"] = "Backorders";
+}
+
+<div id="app" v-cloak>
+    <div class="an-card" style="margin:1rem 1.5rem">
+        <div class="an-head">
+            <h6><i class="fas fa-hourglass-half me-2" style="color:var(--primary)"></i>Backorders <small>customer orders waiting for stock</small></h6>
+            <div>
+                <button type="button" class="btn btn-sm btn-outline-primary me-1" :disabled="!state.lines.length" @@click="handler.exportCsv()"><i class="fas fa-file-csv me-1"></i> Export CSV</button>
+                <button type="button" class="btn btn-sm btn-outline-primary" @@click="handler.load()"><i class="fas fa-sync me-1"></i> Refresh</button>
+            </div>
+        </div>
+
+        <div class="sa-kpis">
+            <div class="sa-kpi" :class="{ bad: state.ordersAffected > 0 }"><span>Orders affected</span><b>{{ state.ordersAffected }}</b></div>
+            <div class="sa-kpi"><span>Lines short</span><b>{{ state.linesBackordered }}</b></div>
+            <div class="sa-kpi"><span>Units short</span><b>{{ methods.n(state.unitsShort) }}</b></div>
+            <div class="sa-kpi" :class="{ warn: state.oldestDays > 7 }"><span>Oldest wait (days)</span><b>{{ state.oldestDays }}</b></div>
+        </div>
+
+        <div class="small fw-bold text-uppercase text-muted mb-1">What to order</div>
+        <div class="table-responsive mb-4">
+            <table class="table table-sm align-middle mb-0">
+                <thead><tr><th>Product</th><th class="text-end">On hand</th><th class="text-end">Customers want</th><th class="text-end">Short</th><th class="text-end">Already on order</th><th class="text-end">Still to order</th></tr></thead>
+                <tbody>
+                    <tr v-if="!state.products.length"><td colspan="6" class="text-center text-muted py-3">{{ state.loading ? 'Loading...' : 'No product is short. Every open sales order can be filled from stock.' }}</td></tr>
+                    <tr v-for="p in state.products" :key="p.productId">
+                        <td><div class="fw-semibold">{{ p.productName }}</div><small class="text-muted">{{ p.productNumber }}</small></td>
+                        <td class="text-end">{{ methods.n(p.onHand) }}</td><td class="text-end">{{ methods.n(p.outstanding) }}</td>
+                        <td class="text-end text-danger fw-bold">{{ methods.n(p.short) }}</td><td class="text-end">{{ methods.n(p.incoming) }}</td>
+                        <td class="text-end fw-bold" :class="p.toOrder > 0 ? 'text-warning' : 'text-success'">{{ methods.n(p.toOrder) }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="sa-filters">
+            <div class="sa-chips">
+                <button v-for="f in state.filters" :key="f.key" type="button" class="sa-chip" :class="{ on: state.filter === f.key }" @@click="state.filter = f.key">{{ f.label }}</button>
+            </div>
+            <input type="search" class="form-control form-control-sm sa-search" v-model="state.search" placeholder="Search order, customer or product">
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead><tr><th>Order</th><th>Product</th><th class="text-end">Ordered</th><th class="text-end">Delivered</th><th class="text-end">Outstanding</th><th class="text-end">Can ship now</th><th class="text-end">Short</th><th>Status</th></tr></thead>
+                <tbody>
+                    <tr v-if="state.loading"><td colspan="8" class="text-center text-muted py-4">Loading...</td></tr>
+                    <tr v-else-if="!methods.rows().length"><td colspan="8" class="text-center text-muted py-4">Nothing matches this filter.</td></tr>
+                    <tr v-for="r in methods.rows()" :key="r.salesOrderId + r.productId">
+                        <td><div class="fw-semibold">{{ r.orderNumber }}</div><small class="text-muted">{{ r.customer }} &middot; {{ r.daysWaiting }}d</small></td>
+                        <td><div>{{ r.productName }}</div><small class="text-muted">{{ r.productNumber }}</small></td>
+                        <td class="text-end">{{ methods.n(r.ordered) }}</td><td class="text-end">{{ methods.n(r.delivered) }}</td>
+                        <td class="text-end">{{ methods.n(r.outstanding) }}</td><td class="text-end">{{ methods.n(r.canShipNow) }}</td>
+                        <td class="text-end fw-bold" :class="r.short > 0 ? 'text-danger' : ''">{{ methods.n(r.short) }}<small v-if="r.coveredByIncoming > 0" class="text-muted fw-normal d-block">{{ methods.n(r.coveredByIncoming) }} incoming</small></td>
+                        <td><span class="badge" :class="methods.badge(r.state)">{{ r.state }}</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="small text-muted mt-2">Open sales orders are filled oldest first from stock on hand. Short = outstanding minus what stock can cover. Create the delivery order for the Ready and Partial lines, and order the Still to order quantities from vendors (Reorder Suggestions can draft the purchase orders).</div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .sa-kpis { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: .8rem; margin-bottom: 1rem; }
+        .sa-kpi { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: .7rem .9rem; }
+        .sa-kpi span { display: block; font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+        .sa-kpi b { font-size: 1.4rem; color: var(--ink); }
+        .sa-kpi.bad b { color: var(--bad); } .sa-kpi.warn b { color: var(--warn); }
+        .sa-filters { display: flex; flex-wrap: wrap; gap: .8rem; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .sa-chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+        .sa-chip { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: .25rem .8rem; font-size: .8rem; cursor: pointer; }
+        .sa-chip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+        .sa-search { max-width: 280px; }
+        @@media (max-width: 991px) { .sa-kpis { grid-template-columns: 1fr 1fr; } }
+    </style>
+    <script src="~/FrontEnd/Pages/SalesOrders/Backorders.cshtml.js"></script>
+}

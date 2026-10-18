@@ -1,0 +1,34 @@
+@page
+@model InventraUI.FrontEnd.Pages.Dashboards.WarehouseDashboardModel
+@attribute [Authorize]
+@{
+    ViewData["Title"] = "Warehouse";
+    ViewData["HideHead"] = true;
+}
+
+<link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+<link href="~/css/persona.css" rel="stylesheet" asp-append-version="true" />
+
+<partial name="_PersonaBody" />
+
+@section scripts {
+    <script>
+        window.PERSONA = {
+            title: 'Warehouse',
+            subtitle: 'Here is your warehouse work for today.',
+            showUsers: false,
+            tiles: [
+            { title: 'My tasks', text: 'Work assigned to you or waiting for anyone', icon: 'fa-clipboard-check', link: '/Warehouses/Tasks' },
+            { title: 'Receiving & put-away', text: 'Book in goods and store them', icon: 'fa-pallet', link: '/Warehouses/PutAway' },
+            { title: 'Pick list', text: 'What to pick, in walking order', icon: 'fa-dolly', link: '/Warehouses/PickList' },
+            { title: 'Wave picking', text: 'Batch several orders into one pick', icon: 'fa-layer-group', link: '/Warehouses/WavePicking' },
+            { title: 'Packing & shipping', text: 'Pack, label and hand over shipments', icon: 'fa-box-open', link: '/Warehouses/Packing' },
+            { title: 'Dock schedule', text: 'Trucks arriving and leaving today', icon: 'fa-truck-loading', link: '/Warehouses/DockSchedule' },
+            { title: 'Bin moves', text: 'Move and replenish stock between bins', icon: 'fa-exchange-alt', link: '/Warehouses/BinMoves' },
+            { title: 'Returns inspection', text: 'Check and decide on returned goods', icon: 'fa-undo', link: '/Warehouses/ReturnsInspection' },
+            { title: 'Scan & labels', text: 'Look up a product by scanning', icon: 'fa-barcode', link: '/Products/ProductScan' }
+            ]
+        };
+    </script>
+    <script src="~/js/persona-dashboard.js" asp-append-version="true"></script>
+}

@@ -1,0 +1,34 @@
+﻿@page
+@model InventraUI.FrontEnd.Pages.Dashboards.AuditorDashboardModel
+@attribute [Authorize]
+@{
+    ViewData["Title"] = "Audit";
+    ViewData["HideHead"] = true;
+}
+
+<link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+<link href="~/css/persona.css" rel="stylesheet" asp-append-version="true" />
+
+<partial name="_PersonaBody" />
+
+@section scripts {
+    <script>
+        window.PERSONA = {
+            title: 'Audit',
+            subtitle: 'Read-only view of adjustments, write-offs, count differences and deletions.',
+            showUsers: false,
+            tiles: [
+            { title: 'Audit log', text: 'Who changed what, and when', icon: 'fa-history', link: '/Users/AuditLog' },
+            { title: 'Stock counts', text: 'Count results and differences', icon: 'fa-tasks', link: '/StockCounts/StockCountList' },
+            { title: 'Positive adjustments', text: 'Stock added outside normal receipts', icon: 'fa-plus-circle', link: '/PositiveAdjustments/PositiveAdjustmentList' },
+            { title: 'Negative adjustments', text: 'Stock written down', icon: 'fa-minus-circle', link: '/NegativeAdjustments/NegativeAdjustmentList' },
+            { title: 'Scrapping', text: 'Goods written off as scrap', icon: 'fa-trash-alt', link: '/Scrappings/ScrappingList' },
+            { title: 'Transaction report', text: 'Every inventory transaction', icon: 'fa-list', link: '/TransactionReports/TransactionReportList' },
+            { title: 'Movement report', text: 'Everything that went in and out', icon: 'fa-random', link: '/MovementReports/MovementReportList' },
+            { title: 'Stock report', text: 'Stock on hand by product and warehouse', icon: 'fa-warehouse', link: '/StockReports/StockReportList' },
+            { title: 'Business analytics', text: 'Long-form charts for revenue, stock and operations', icon: 'fa-chart-line', link: '/Dashboards/BusinessAnalytics' }
+            ]
+        };
+    </script>
+    <script src="~/js/persona-dashboard.js" asp-append-version="true"></script>
+}

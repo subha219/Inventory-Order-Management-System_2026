@@ -1,0 +1,21 @@
+﻿@page
+@attribute [Authorize(Roles = "StockReports")]
+@{
+    ViewData["Title"] = "Stock Report List";
+}
+
+<div id="app" v-cloak>
+    <div id="reportKpis" class="rk-kpis"></div>
+    <div class="row">
+        <div class="col-12">
+            <div class="grid-container report-grid">
+                <div ref="mainGridRef"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <script src="~/js/report-summary.js" asp-append-version="true"></script>
+    <script src="~/FrontEnd/Pages/StockReports/StockReportList.cshtml.js"></script>
+}

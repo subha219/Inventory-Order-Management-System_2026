@@ -1,0 +1,56 @@
+@page
+@attribute [Authorize(Roles = "PurchaseOrders,SalesOrders")]
+@{
+    ViewData["Title"] = "Partner Portals";
+}
+
+<div id="app" v-cloak>
+    <div class="pt-wrap">
+        <div class="an-card">
+            <div class="an-head"><h6><i class="fas fa-handshake me-2" style="color:var(--primary)"></i>Share an order <small>vendors confirm, customers follow delivery. No account needed.</small></h6></div>
+            <div class="pt-form">
+                <div><label class="pt-label">Who is it for</label><select class="form-select form-select-sm" v-model="state.kind" @@change="state.orderId = ''"><option value="PurchaseOrder">Vendor (purchase order)</option><option value="SalesOrder">Customer (sales order)</option></select></div>
+                <div class="pt-wide"><label class="pt-label">Order</label>
+                    <select class="form-select form-select-sm" v-model="state.orderId"><option value="">Choose...</option><option v-for="o in methods.orders()" :key="o.id" :value="o.id">{{ o.number }} - {{ o.partyName }} ({{ o.status }})</option></select></div>
+                <div><label class="pt-label">Link works for (days)</label><input type="number" min="1" max="365" class="form-control form-control-sm" v-model.number="state.days"></div>
+                <div class="align-self-end"><button class="btn btn-sm btn-primary" :disabled="state.busy" @@click="handler.create()"><i class="fas fa-link me-1"></i> Create and copy link</button></div>
+            </div>
+            <div class="small text-muted mt-2">Anyone holding the link can see that order and reply to it, so send it only to the vendor or customer concerned. You can switch a link off at any time.</div>
+        </div>
+
+        <div class="an-card">
+            <div class="an-head"><h6>Links and replies</h6></div>
+            <div v-if="!state.links.length" class="text-muted small">No links yet.</div>
+            <div v-for="l in state.links" :key="l.id" class="pt-link" :class="{ off: !l.active }">
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <b>{{ l.orderNumber }}</b><span class="text-muted small">{{ l.entityType === 'PurchaseOrder' ? 'Vendor' : 'Customer' }} &middot; {{ l.partyName }}</span>
+                    <span class="badge" :class="l.active ? 'bg-success' : 'bg-secondary'">{{ l.active ? 'active until ' + methods.day(l.expiresAtUtc) : 'off or expired' }}</span>
+                    <span class="ms-auto d-flex gap-1">
+                        <button class="btn btn-sm btn-outline-primary" :disabled="!l.active" @@click="handler.copy(l)"><i class="fas fa-copy me-1"></i> Copy link</button>
+                        <button class="btn btn-sm btn-outline-danger" :disabled="!l.active" @@click="handler.off(l)">Switch off</button>
+                    </span>
+                </div>
+                <div v-for="(r, i) in l.responses" :key="i" class="pt-reply" :class="r.status">
+                    <b>{{ r.status }}</b> <span class="text-muted small">{{ methods.when(r.at) }}<span v-if="r.expectedDate"> &middot; delivery promised {{ methods.day(r.expectedDate) }}</span></span>
+                    <div v-if="r.message">{{ r.message }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .pt-wrap { max-width: 980px; margin: 1rem auto; padding: 0 1rem; display: grid; gap: 1rem; }
+        .pt-label { display: block; font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: .2rem; }
+        .pt-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .7rem; }
+        .pt-wide { grid-column: span 2; }
+        .pt-link { border: 1px solid var(--line); border-radius: 10px; padding: .6rem .8rem; margin-bottom: .6rem; background: var(--surface-2); }
+        .pt-link.off { opacity: .65; }
+        .pt-reply { margin-top: .4rem; padding: .4rem .6rem; border-left: 4px solid var(--primary); background: var(--surface); border-radius: 6px; }
+        .pt-reply.Confirmed { border-left-color: #16a34a; } .pt-reply.Declined { border-left-color: #dc2626; } .pt-reply.Question { border-left-color: #d97706; }
+        @@media (max-width: 700px) { .pt-wide { grid-column: auto; } }
+    </style>
+    <script src="~/FrontEnd/Pages/PurchaseOrders/Portal.cshtml.js"></script>
+}

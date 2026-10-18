@@ -1,0 +1,33 @@
+@page
+@model InventraUI.FrontEnd.Pages.Dashboards.FinanceDashboardModel
+@attribute [Authorize]
+@{
+    ViewData["Title"] = "Finance";
+    ViewData["HideHead"] = true;
+}
+
+<link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+<link href="~/css/persona.css" rel="stylesheet" asp-append-version="true" />
+
+<partial name="_PersonaBody" />
+
+@section scripts {
+    <script>
+        window.PERSONA = {
+            title: 'Finance',
+            subtitle: 'Here are the numbers: revenue, purchases, stock value and cost.',
+            showUsers: false,
+            tiles: [
+            { title: 'Business analytics', text: 'Long-form charts for revenue, stock and operations', icon: 'fa-chart-line', link: '/Dashboards/BusinessAnalytics' },
+            { title: 'Sales report', text: 'Revenue by customer and period', icon: 'fa-chart-bar', link: '/SalesReports/SalesReportList' },
+            { title: 'Purchase report', text: 'Spend by vendor and period', icon: 'fa-chart-pie', link: '/PurchaseReports/PurchaseReportList' },
+            { title: 'Costing & landed cost', text: 'What the stock is worth', icon: 'fa-coins', link: '/StockReports/Costing' },
+            { title: 'Stock report', text: 'Stock on hand by product and warehouse', icon: 'fa-warehouse', link: '/StockReports/StockReportList' },
+            { title: 'Movement report', text: 'Everything that went in and out', icon: 'fa-random', link: '/MovementReports/MovementReportList' },
+            { title: 'Transaction report', text: 'Every inventory transaction', icon: 'fa-list', link: '/TransactionReports/TransactionReportList' },
+            { title: 'Taxes', text: 'Tax rates used on orders', icon: 'fa-percent', link: '/Taxs/TaxList' }
+            ]
+        };
+    </script>
+    <script src="~/js/persona-dashboard.js" asp-append-version="true"></script>
+}

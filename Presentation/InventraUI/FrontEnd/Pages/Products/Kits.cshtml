@@ -1,0 +1,91 @@
+@page
+@attribute [Authorize(Roles = "Products")]
+@{
+    ViewData["Title"] = "Kits & Assembly";
+}
+
+<div id="app" v-cloak>
+    <div class="kt-layout">
+        <div class="an-card">
+            <div class="an-head"><h6><i class="fas fa-boxes me-2" style="color:var(--primary)"></i>Kits <small>built from components</small></h6></div>
+            <label class="kt-label">Count stock in</label>
+            <select class="form-select form-select-sm mb-2" v-model="state.warehouseId" @@change="handler.fetch()"><option value="">All warehouses</option><option v-for="w in state.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select>
+            <button type="button" class="btn btn-sm btn-primary w-100 mb-2" @@click="handler.newKit()"><i class="fas fa-plus me-1"></i> New kit</button>
+            <div v-if="state.loading" class="text-muted small py-2">Loading...</div>
+            <div v-else-if="!state.kits.length" class="text-muted small py-2">No kits yet. A kit is a product built from other products, for example a gift box made of three items.</div>
+            <button v-for="k in state.kits" :key="k.productId" type="button" class="kt-kit" :class="{ on: state.selected === k.productId }" @@click="handler.select(k)">
+                <div class="d-flex justify-content-between"><b>{{ k.productName }}</b><span class="badge" :class="k.buildable > 0 ? 'bg-success' : 'bg-danger'">can build {{ methods.n(k.buildable) }}</span></div>
+                <small class="text-muted">{{ k.productNumber }} &middot; {{ methods.n(k.onHand) }} in stock<span v-if="k.limiting"> &middot; limited by {{ k.limiting }}</span></small>
+            </button>
+        </div>
+
+        <div>
+            <div class="an-card" v-if="state.editing">
+                <div class="an-head"><h6>{{ state.isNew ? 'New kit' : 'Bill of materials' }} <small>what one kit is made of</small></h6></div>
+                <div class="mb-2" v-if="state.isNew">
+                    <label class="kt-label">Kit product</label>
+                    <select class="form-select form-select-sm" v-model="state.edit.kitId"><option value="">Choose the finished product...</option><option v-for="p in state.products" :key="p.id" :value="p.id">{{ p.name }} ({{ p.number }})</option></select>
+                    <div class="small text-muted mt-1">Create the finished product on the Product page first if it does not exist yet.</div>
+                </div>
+                <div v-else class="mb-2"><b>{{ methods.productName(state.edit.kitId) }}</b></div>
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Component</th><th class="text-end" style="width:130px">Per kit</th><th style="width:50px"></th></tr></thead>
+                    <tbody>
+                        <tr v-for="(l, i) in state.edit.lines" :key="i">
+                            <td><select class="form-select form-select-sm" v-model="l.componentId"><option value="">Choose...</option><option v-for="p in methods.componentOptions(l.componentId)" :key="p.id" :value="p.id">{{ p.name }} ({{ p.number }})</option></select></td>
+                            <td><input type="number" min="0" step="any" class="form-control form-control-sm text-end" v-model.number="l.quantity"></td>
+                            <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger" @@click="state.edit.lines.splice(i, 1)"><i class="fas fa-times"></i></button></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-primary" @@click="state.edit.lines.push({ componentId: '', quantity: 1 })"><i class="fas fa-plus me-1"></i> Add component</button>
+                    <button type="button" class="btn btn-sm btn-primary" :disabled="state.busy" @@click="handler.saveBom()"><i class="fas fa-save me-1"></i> Save</button>
+                    <button v-if="!state.isNew" type="button" class="btn btn-sm btn-outline-danger ms-auto" @@click="handler.removeBom()">Remove this kit definition</button>
+                </div>
+            </div>
+
+            <div class="an-card mt-3" v-if="methods.current() && !state.isNew">
+                <div class="an-head"><h6>Build {{ methods.current().productName }} <small>components out, finished kits in</small></h6></div>
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Component</th><th class="text-end">Per kit</th><th class="text-end">In stock</th><th class="text-end">Allows</th><th class="text-end">Needed for this build</th></tr></thead>
+                    <tbody>
+                        <tr v-for="c in methods.current().components" :key="c.productId" :class="{ 'text-danger': c.onHand + 1e-9 < c.perKit * (Number(state.build.qty) || 0) }">
+                            <td>{{ c.productName }} <small class="text-muted">{{ c.productNumber }}</small></td><td class="text-end">{{ methods.n(c.perKit) }}</td><td class="text-end">{{ methods.n(c.onHand) }}</td><td class="text-end">{{ methods.n(c.allows) }}</td>
+                            <td class="text-end">{{ methods.n(c.perKit * (Number(state.build.qty) || 0)) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="kt-form">
+                    <div><label class="kt-label">Warehouse</label><select class="form-select form-select-sm" v-model="state.build.warehouseId"><option value="">Choose...</option><option v-for="w in state.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select></div>
+                    <div><label class="kt-label">How many kits</label><input type="number" min="0" step="any" class="form-control form-control-sm text-end" v-model.number="state.build.qty"></div>
+                    <div class="kt-wide"><label class="kt-label">Note (optional)</label><input class="form-control form-control-sm" v-model="state.build.notes" maxlength="500"></div>
+                    <div class="align-self-end"><button type="button" class="btn btn-sm btn-success" :disabled="state.busy" @@click="handler.build()"><i class="fas fa-hammer me-1"></i> Build</button></div>
+                </div>
+                <div class="small text-muted mt-2">Building creates two confirmed stock adjustments, one taking the components out and one bringing the kits in, so it shows in every stock report.</div>
+            </div>
+
+            <div class="an-card mt-3" v-if="state.history.length">
+                <div class="an-head"><h6>Recent builds</h6></div>
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>When</th><th>Build</th><th>Kit</th><th class="text-end">Qty</th><th>Warehouse</th><th>Documents</th><th>By</th></tr></thead>
+                    <tbody><tr v-for="h in state.history" :key="h.number"><td class="text-nowrap">{{ methods.when(h.at) }}</td><td>{{ h.number }}</td><td>{{ h.kitName }}</td><td class="text-end">{{ methods.n(h.quantity) }}</td><td>{{ h.warehouseName }}</td><td class="small">{{ h.componentsDocument }}, {{ h.kitsDocument }}</td><td>{{ methods.user(h.userId) }}</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .kt-layout { display: grid; grid-template-columns: minmax(280px, 340px) 1fr; gap: 1rem; margin: 1rem 1.5rem; align-items: start; }
+        .kt-label { display: block; font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: .2rem; }
+        .kt-kit { display: block; width: 100%; text-align: left; border: 1px solid var(--line); background: var(--surface); color: inherit; border-radius: 10px; padding: .6rem .8rem; margin-bottom: .5rem; cursor: pointer; }
+        .kt-kit.on { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-tint); }
+        .kt-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .7rem; }
+        .kt-wide { grid-column: span 2; }
+        @@media (max-width: 991px) { .kt-layout { grid-template-columns: 1fr; } .kt-wide { grid-column: auto; } }
+    </style>
+    <script src="~/FrontEnd/Pages/Products/Kits.cshtml.js"></script>
+}

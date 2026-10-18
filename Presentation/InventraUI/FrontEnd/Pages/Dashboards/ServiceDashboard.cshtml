@@ -1,0 +1,33 @@
+﻿@page
+@model InventraUI.FrontEnd.Pages.Dashboards.ServiceDashboardModel
+@attribute [Authorize]
+@{
+    ViewData["Title"] = "Customer service";
+    ViewData["HideHead"] = true;
+}
+
+<link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+<link href="~/css/persona.css" rel="stylesheet" asp-append-version="true" />
+
+<partial name="_PersonaBody" />
+
+@section scripts {
+    <script>
+        window.PERSONA = {
+            title: 'Customer service',
+            subtitle: 'Here is where customer orders stand and what is late.',
+            showUsers: false,
+            tiles: [
+            { title: 'Sales orders', text: 'Look up and follow customer orders', icon: 'fa-shopping-cart', link: '/SalesOrders/SalesOrderList' },
+            { title: 'Backorders', text: 'Orders waiting for stock', icon: 'fa-hourglass-half', link: '/SalesOrders/Backorders' },
+            { title: 'Delivery orders', text: 'What shipped and what is waiting', icon: 'fa-truck', link: '/DeliveryOrders/DeliveryOrderList' },
+            { title: 'Customers', text: 'Customers and their contacts', icon: 'fa-address-book', link: '/Customers/CustomerList' },
+            { title: 'Customer contacts', text: 'Who to call or write to', icon: 'fa-id-card', link: '/CustomerContacts/CustomerContactList' },
+            { title: 'Sales returns', text: 'Take goods back from a customer', icon: 'fa-undo', link: '/SalesReturns/SalesReturnList' },
+            { title: 'Sales report', text: 'Revenue by customer and period', icon: 'fa-chart-bar', link: '/SalesReports/SalesReportList' },
+            { title: 'Stock availability', text: 'Can we ship it today?', icon: 'fa-boxes', link: '/Products/StockAvailability' }
+            ]
+        };
+    </script>
+    <script src="~/js/persona-dashboard.js" asp-append-version="true"></script>
+}

@@ -1,0 +1,119 @@
+@page "/portal/{token}"
+@model InventraUI.FrontEnd.Pages.Public.PortalModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex">
+    <title>Your order</title>
+    <style>
+        :root { --bg: #f4f6fa; --card: #fff; --text: #1b2430; --muted: #6b7686; --line: #e1e6ee; --primary: #2563eb; --ok: #16a34a; --bad: #dc2626; }
+        @@media (prefers-color-scheme: dark) { :root { --bg: #0f141b; --card: #182029; --text: #e8edf4; --muted: #93a0b2; --line: #2a3441; --primary: #60a5fa; --ok: #4ade80; --bad: #f87171; } }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+        main { max-width: 680px; margin: 0 auto; padding: 24px 16px; }
+        .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-bottom: 14px; }
+        h1 { font-size: 1.3rem; margin: 0 0 4px; } h2 { font-size: 1rem; margin: 0 0 10px; }
+        .muted { color: var(--muted); font-size: .9rem; }
+        table { width: 100%; border-collapse: collapse; } th { text-align: left; color: var(--muted); font-size: .8rem; font-weight: 600; }
+        td, th { padding: 8px 4px; border-top: 1px solid var(--line); } .r { text-align: right; }
+        label { display: block; font-size: .8rem; color: var(--muted); margin: 10px 0 4px; }
+        input, textarea { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; }
+        .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+        button { padding: 10px 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+        button.ok { background: var(--ok); border-color: var(--ok); color: #fff; } button.bad { color: var(--bad); border-color: var(--bad); } button.go { background: var(--primary); border-color: var(--primary); color: #fff; }
+        button:disabled { opacity: .5; cursor: default; }
+        .pill { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: .78rem; font-weight: 600; background: var(--line); }
+        .msg { padding: 10px 12px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); margin-top: 8px; font-size: .9rem; }
+        a { color: var(--primary); }
+    </style>
+</head>
+<body>
+<main id="app">
+    <div class="card" v-if="loading"><span class="muted">Loading...</span></div>
+    <div class="card" v-else-if="!data"><h1>Link not found</h1><p class="muted">This link is not valid. Please check the link you were sent.</p></div>
+    <div class="card" v-else-if="data.expired"><h1>This link has expired</h1><p class="muted">Please ask us for a new link.</p></div>
+    <template v-else>
+        <div class="card">
+            <div class="muted">{{ data.companyName }}</div>
+            <h1>{{ data.kind === 'Vendor' ? 'Purchase order' : 'Order' }} {{ data.number }}</h1>
+            <div class="muted">For {{ data.partyName }} &middot; {{ dateOf(data.orderDate) }} &middot; <span class="pill">{{ data.status }}</span></div>
+        </div>
+        <div class="card">
+            <h2>Items</h2>
+            <table>
+                <tr><th>Item</th><th class="r">Qty</th><th class="r">Price</th><th class="r">Total</th></tr>
+                <tr v-for="(i, ix) in data.items" :key="ix"><td>{{ i.productName }}</td><td class="r">{{ i.quantity }}</td><td class="r">{{ money(i.unitPrice) }}</td><td class="r">{{ money(i.total) }}</td></tr>
+                <tr><td colspan="3"><b>Total (with tax)</b></td><td class="r"><b>{{ money(data.total) }}</b></td></tr>
+            </table>
+        </div>
+        <div class="card" v-if="data.kind === 'Customer'">
+            <h2>Delivery</h2>
+            <div v-if="!data.shipments.length" class="muted">Your order has not shipped yet. This page updates when it does.</div>
+            <div v-for="s in data.shipments" :key="s.number" class="msg">
+                <b>{{ s.number }}</b> <span class="pill">{{ s.status === 'Shipped' ? 'On its way' : 'Being packed' }}</span>
+                <div class="muted">{{ s.carrier || 'Carrier to be confirmed' }}<span v-if="s.trackingNumber"> &middot; tracking {{ s.trackingNumber }}</span><span v-if="s.shippedAtUtc"> &middot; shipped {{ dateOf(s.shippedAtUtc) }}</span></div>
+                <a v-if="s.trackToken" :href="'/track/' + s.trackToken">Open tracking page</a>
+            </div>
+        </div>
+        <div class="card">
+            <h2>{{ data.kind === 'Vendor' ? 'Your reply' : 'Questions about your order' }}</h2>
+            <div v-if="sent" class="msg">{{ sent }}</div>
+            <template v-else>
+                <template v-if="data.kind === 'Vendor'">
+                    <label>When can you deliver? (optional)</label>
+                    <input type="date" v-model="form.date">
+                </template>
+                <label>{{ data.kind === 'Vendor' ? 'Message (optional, required for a question)' : 'Your question or note' }}</label>
+                <textarea rows="3" maxlength="1000" v-model="form.message"></textarea>
+                <div class="row">
+                    <button v-if="data.kind === 'Vendor'" class="ok" :disabled="busy" @@click="send('Confirmed')">Confirm order</button>
+                    <button v-else class="ok" :disabled="busy" @@click="send('Confirmed')">Everything looks right</button>
+                    <button v-if="data.kind === 'Vendor'" class="bad" :disabled="busy" @@click="send('Declined')">Decline</button>
+                    <button class="go" :disabled="busy" @@click="send('Question')">Send a question</button>
+                </div>
+                <div v-if="error" class="msg" style="color:var(--bad)">{{ error }}</div>
+            </template>
+            <div v-if="data.responses.length" style="margin-top:14px">
+                <div class="muted">Earlier replies</div>
+                <div v-for="(r, ix) in data.responses" :key="ix" class="msg"><b>{{ r.status }}</b> &middot; {{ dateOf(r.at) }}<span v-if="r.expectedDate"> &middot; delivery {{ dateOf(r.expectedDate) }}</span><div v-if="r.message">{{ r.message }}</div></div>
+            </div>
+        </div>
+    </template>
+</main>
+<script src="~/lib/vue/vue.global.prod.js"></script>
+<script>
+    var token = '@Model.Token';
+    Vue.createApp({
+        data: function () { return { loading: true, data: null, busy: false, sent: '', error: '', form: { date: '', message: '' } }; },
+        methods: {
+            dateOf: function (d) { return d ? new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : ''; },
+            money: function (v) { return (v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
+            load: function () {
+                var self = this;
+                return fetch('/api/portal/view/' + encodeURIComponent(token)).then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (j) { self.data = j && j.content ? j.content : null; }).catch(function () { self.data = null; });
+            },
+            send: function (status) {
+                var self = this;
+                self.error = ''; self.busy = true;
+                fetch('/api/portal/respond/' + encodeURIComponent(token), {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: status, expectedDate: self.form.date ? new Date(self.form.date).toISOString() : null, message: self.form.message })
+                }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+                  .then(function (res) {
+                      if (res.ok) { self.sent = 'Thank you. Your reply has been sent.'; self.form = { date: '', message: '' }; return self.load(); }
+                      self.error = ((res.j && res.j.message) || 'Something went wrong. Please try again.').replace(/^Exception: /, '');
+                  }).catch(function () { self.error = 'Something went wrong. Please try again.'; })
+                  .finally(function () { self.busy = false; });
+            }
+        },
+        mounted: function () { var self = this; this.load().finally(function () { self.loading = false; }); }
+    }).mount('#app');
+</script>
+</body>
+</html>

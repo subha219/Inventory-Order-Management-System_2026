@@ -1,0 +1,103 @@
+@page
+@attribute [Authorize(Roles = "Warehouses")]
+@{
+    ViewData["Title"] = "Bin Moves & Replenishment";
+}
+
+<div id="app" v-cloak>
+    <div class="an-card" style="margin:1rem 1.5rem">
+        <div class="an-head">
+            <h6><i class="fas fa-exchange-alt me-2" style="color:var(--primary)"></i>Bin moves &amp; replenishment <small>move stock between locations and keep pick locations full</small></h6>
+            <div class="ap-tabs">
+                <button v-for="t in state.tabs" :key="t.key" type="button" class="ap-tab" :class="{ on: state.tab === t.key }" @@click="state.tab = t.key">{{ t.label }}<span v-if="t.key === 'replenish' && state.suggestions.length" class="ap-count">{{ state.suggestions.length }}</span></button>
+            </div>
+        </div>
+
+        <!-- replenishment -->
+        <div v-if="state.tab === 'replenish'">
+            <div v-if="!state.rules.length" class="text-muted small">No rules yet. Add a rule on the Rules tab: for a pick location and product, set the Min (refill below this) and the Max (refill up to this).</div>
+            <div v-else-if="!state.suggestions.length" class="alert alert-success py-2">Every rule is above its minimum. Nothing to refill.</div>
+            <template v-else>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="small text-muted">{{ state.suggestions.length }} location(s) are below their minimum.</div>
+                    <button type="button" class="btn btn-sm btn-primary" :disabled="state.busy" @@click="handler.doAll()"><i class="fas fa-bolt me-1"></i> Do all possible moves</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead><tr><th>Product</th><th>Refill</th><th class="text-end">Now</th><th class="text-end">Min / Max</th><th>Take from</th><th class="text-end">Move</th><th></th></tr></thead>
+                        <tbody>
+                            <tr v-for="s in state.suggestions" :key="s.ruleId">
+                                <td>{{ s.productName }}</td><td class="fw-semibold">{{ s.toLocationCode }}</td>
+                                <td class="text-end">{{ methods.n(s.current) }}</td><td class="text-end">{{ methods.n(s.min) }} / {{ methods.n(s.max) }}</td>
+                                <td>{{ s.fromLocationCode || '-' }}<span v-if="s.short" class="badge bg-warning text-dark ms-1">{{ s.fromLocationCode ? 'Not enough stock' : 'No stock elsewhere' }}</span></td>
+                                <td class="text-end">{{ methods.n(s.quantity) }}</td>
+                                <td class="text-end"><button type="button" class="btn btn-sm btn-outline-primary" :disabled="state.busy || !s.fromLocationId || !(s.quantity > 0)" @@click="handler.doOne(s)">Move</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </template>
+        </div>
+
+        <!-- manual move -->
+        <div v-if="state.tab === 'move'">
+            <div class="bm-form">
+                <div><label>Product</label>
+                    <select class="form-select form-select-sm" v-model="state.move.productId" @@change="state.move.fromId = ''; state.move.toId = ''"><option value="">Choose...</option><option v-for="p in methods.products()" :key="p.id" :value="p.id">{{ p.name }}</option></select></div>
+                <div><label>From</label>
+                    <select class="form-select form-select-sm" v-model="state.move.fromId" @@change="state.move.toId = ''"><option value="">Choose...</option><option v-for="s in methods.sources()" :key="s.locationId" :value="s.locationId">{{ s.locationCode }} ({{ methods.n(s.quantity) }} here)</option></select></div>
+                <div><label>To</label>
+                    <select class="form-select form-select-sm" v-model="state.move.toId"><option value="">Choose...</option><option v-for="l in methods.targets()" :key="l.id" :value="l.id">{{ l.code }}{{ l.capacity ? ' (room ' + methods.n(Math.max(l.capacity - l.used, 0)) + ')' : '' }}</option></select></div>
+                <div><label>Quantity</label><input type="number" min="0" step="any" class="form-control form-control-sm text-end" v-model.number="state.move.qty"></div>
+                <div class="bm-wide"><label>Reason (optional)</label><input class="form-control form-control-sm" v-model="state.move.reason" maxlength="255"></div>
+                <div class="align-self-end"><button type="button" class="btn btn-sm btn-primary" :disabled="state.busy" @@click="handler.moveManual()"><i class="fas fa-arrow-right me-1"></i> Move stock</button></div>
+            </div>
+            <div class="small text-muted mt-2">Both locations must be in the same warehouse. To move stock between warehouses use a transfer.</div>
+        </div>
+
+        <!-- rules -->
+        <div v-if="state.tab === 'rules'">
+            <div class="bm-form mb-3">
+                <div><label>Pick location</label><select class="form-select form-select-sm" v-model="state.rule.locationId"><option value="">Choose...</option><option v-for="l in state.locations" :key="l.id" :value="l.id">{{ l.warehouseName }} / {{ l.code }}</option></select></div>
+                <div><label>Product</label><select class="form-select form-select-sm" v-model="state.rule.productId"><option value="">Choose...</option><option v-for="p in state.allProducts" :key="p.id" :value="p.id">{{ p.name }}</option></select></div>
+                <div><label>Min (refill below)</label><input type="number" min="0" step="any" class="form-control form-control-sm text-end" v-model.number="state.rule.min"></div>
+                <div><label>Max (refill up to)</label><input type="number" min="0" step="any" class="form-control form-control-sm text-end" v-model.number="state.rule.max"></div>
+                <div class="align-self-end"><button type="button" class="btn btn-sm btn-primary" :disabled="state.busy" @@click="handler.saveRule()"><i class="fas fa-save me-1"></i> Save rule</button></div>
+            </div>
+            <table class="table table-sm align-middle">
+                <thead><tr><th>Location</th><th>Product</th><th class="text-end">Now</th><th class="text-end">Min</th><th class="text-end">Max</th><th></th></tr></thead>
+                <tbody>
+                    <tr v-if="!state.rules.length"><td colspan="6" class="text-muted">No rules yet.</td></tr>
+                    <tr v-for="r in state.rules" :key="r.id"><td class="fw-semibold">{{ r.locationCode }}</td><td>{{ r.productName }}</td><td class="text-end">{{ methods.n(r.current) }}</td><td class="text-end">{{ methods.n(r.min) }}</td><td class="text-end">{{ methods.n(r.max) }}</td>
+                        <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger" @@click="handler.deleteRule(r)"><i class="fas fa-trash"></i></button></td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- history -->
+        <div v-if="state.tab === 'history'">
+            <table class="table table-sm align-middle">
+                <thead><tr><th>When</th><th>Product</th><th>From</th><th>To</th><th class="text-end">Qty</th><th>Type</th><th>Reason</th><th>By</th></tr></thead>
+                <tbody>
+                    <tr v-if="!state.history.length"><td colspan="8" class="text-muted">No moves yet.</td></tr>
+                    <tr v-for="(h, i) in state.history" :key="i"><td class="text-nowrap">{{ methods.when(h.at) }}</td><td>{{ h.productName }}</td><td>{{ h.from }}</td><td>{{ h.to }}</td><td class="text-end">{{ methods.n(h.quantity) }}</td><td>{{ h.moveType }}</td><td>{{ h.reason }}</td><td>{{ methods.user(h.userId) }}</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .ap-tabs { display: flex; gap: .4rem; flex-wrap: wrap; }
+        .ap-tab { border: 1px solid var(--line); background: var(--surface); color: inherit; border-radius: 999px; padding: .25rem .9rem; font-size: .8rem; cursor: pointer; }
+        .ap-tab.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+        .ap-count { background: var(--amber, #f5a524); color: #000; border-radius: 999px; font-size: .7rem; padding: 0 .4rem; margin-left: .35rem; font-weight: 700; }
+        .bm-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .7rem; }
+        .bm-wide { grid-column: span 2; }
+        .bm-form label { display: block; font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: .2rem; }
+        @@media (max-width: 767px) { .bm-wide { grid-column: auto; } }
+    </style>
+    <script src="~/FrontEnd/Pages/Warehouses/BinMoves.cshtml.js"></script>
+}

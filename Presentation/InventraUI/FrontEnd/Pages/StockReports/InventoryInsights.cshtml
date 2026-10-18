@@ -1,0 +1,92 @@
+@page
+@attribute [Authorize(Roles = "StockReports")]
+@{
+    ViewData["Title"] = "Inventory Insights";
+}
+
+<div id="app" v-cloak>
+    <div class="an-card" style="margin:1rem 1.5rem">
+        <div class="an-head">
+            <h6><i class="fas fa-chart-pie me-2" style="color:var(--primary)"></i>Inventory insights <small>what the stock is worth and what is not moving</small></h6>
+            <div class="no-print">
+                <button type="button" class="btn btn-sm btn-outline-primary me-1" :disabled="!state.rows.length" @@click="handler.exportCsv()"><i class="fas fa-file-csv me-1"></i> Export CSV</button>
+                <button type="button" class="btn btn-sm btn-outline-primary" @@click="handler.print()"><i class="fas fa-print me-1"></i> Print</button>
+            </div>
+        </div>
+
+        <div class="ii-controls no-print">
+            <div><label>Warehouse</label>
+                <select class="form-select form-select-sm" v-model="state.warehouseId" @@change="handler.load()"><option value="">All warehouses</option><option v-for="w in state.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select></div>
+            <div><label>Slow-moving after (days without a sale)</label><input type="number" min="1" class="form-control form-control-sm" v-model.number="state.slowDays" @@change="handler.load()"></div>
+        </div>
+
+        <div class="sa-kpis">
+            <div class="sa-kpi"><span>Stock value</span><b>{{ methods.n(state.totalValue) }}</b></div>
+            <div class="sa-kpi"><span>Units on hand</span><b>{{ methods.n(state.totalUnits) }}</b></div>
+            <div class="sa-kpi" :class="{ warn: state.slowCount > 0 }"><span>Slow-moving value</span><b>{{ methods.n(state.slowValue) }}</b><small>{{ state.slowCount }} products</small></div>
+            <div class="sa-kpi" :class="{ bad: state.deadCount > 0 }"><span>Never sold value</span><b>{{ methods.n(state.deadValue) }}</b><small>{{ state.deadCount }} products</small></div>
+        </div>
+
+        <div class="sa-filters no-print">
+            <div class="sa-chips">
+                <button v-for="f in state.filters" :key="f.key" type="button" class="sa-chip" :class="{ on: state.filter === f.key }" @@click="state.filter = f.key">{{ f.label }}</button>
+            </div>
+            <input type="search" class="form-control form-control-sm sa-search" v-model="state.search" placeholder="Search product or group">
+        </div>
+
+        <div class="row-split">
+            <div class="table-responsive flex-grow-1">
+                <table class="table table-hover align-middle mb-0">
+                    <thead><tr><th>Product</th><th>Group</th><th class="text-end">On hand</th><th class="text-end">Unit price</th><th class="text-end">Value</th><th>Last sold</th><th>Movement</th></tr></thead>
+                    <tbody>
+                        <tr v-if="state.loading"><td colspan="7" class="text-center text-muted py-4">Loading...</td></tr>
+                        <tr v-else-if="!methods.rows().length"><td colspan="7" class="text-center text-muted py-4">Nothing matches this filter.</td></tr>
+                        <tr v-for="r in methods.rows()" :key="r.productId">
+                            <td><div class="fw-semibold">{{ r.productName }}</div><small class="text-muted">{{ r.productNumber }}</small></td>
+                            <td>{{ r.groupName }}</td><td class="text-end">{{ methods.n(r.onHand) }}</td><td class="text-end">{{ methods.n(r.unitPrice) }}</td>
+                            <td class="text-end fw-bold">{{ methods.n(r.value) }}</td>
+                            <td>{{ r.lastSold ? methods.day(r.lastSold) + ' (' + r.daysSinceSold + 'd)' : 'Never' }}</td>
+                            <td><span class="badge" :class="methods.badge(r.movement)">{{ r.movement }}</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <div class="small fw-bold text-uppercase text-muted mb-1">Value by product group</div>
+            <div v-for="g in state.groups" :key="g.groupName" class="ii-bar">
+                <span class="ii-name">{{ g.groupName }} <small class="text-muted">{{ g.products }} products</small></span>
+                <span class="ii-track"><i :style="{ width: methods.pct(g) + '%' }"></i></span>
+                <span class="ii-val">{{ methods.n(g.value) }}</span>
+            </div>
+        </div>
+        <div class="small text-muted mt-3">Value = units on hand x the product's unit price. "Last sold" is the latest confirmed delivery order. Slow means no sale for the number of days above; Never sold means no confirmed delivery has ever included the product.</div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .ii-controls { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(200px, 1fr); gap: .8rem; margin-bottom: 1rem; max-width: 640px; }
+        .ii-controls label { display: block; font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: .25rem; }
+        .sa-kpis { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: .8rem; margin-bottom: 1rem; }
+        .sa-kpi { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: .7rem .9rem; }
+        .sa-kpi span { display: block; font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+        .sa-kpi b { font-size: 1.4rem; color: var(--ink); } .sa-kpi small { display: block; color: var(--muted); font-size: .75rem; }
+        .sa-kpi.bad b { color: var(--bad); } .sa-kpi.warn b { color: var(--warn); }
+        .sa-filters { display: flex; flex-wrap: wrap; gap: .8rem; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .sa-chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+        .sa-chip { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: .25rem .8rem; font-size: .8rem; cursor: pointer; }
+        .sa-chip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+        .sa-search { max-width: 280px; }
+        .row-split { display: flex; }
+        .ii-bar { display: grid; grid-template-columns: minmax(140px, 220px) 1fr 110px; gap: .8rem; align-items: center; margin-bottom: .4rem; font-size: .85rem; }
+        .ii-track { height: 10px; border-radius: 6px; background: var(--line); overflow: hidden; }
+        .ii-track i { display: block; height: 100%; background: var(--primary); }
+        .ii-val { text-align: right; font-weight: 600; }
+        @@media (max-width: 991px) { .sa-kpis { grid-template-columns: 1fr 1fr; } .ii-controls { grid-template-columns: 1fr; } }
+        @@media print { .no-print, .main-sidebar, .main-header, .main-footer { display: none !important; } .content-wrapper { margin: 0 !important; } }
+    </style>
+    <script src="~/FrontEnd/Pages/StockReports/InventoryInsights.cshtml.js"></script>
+}

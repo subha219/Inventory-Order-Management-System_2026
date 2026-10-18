@@ -1,0 +1,84 @@
+@page
+@attribute [Authorize(Roles = "Users")]
+@{
+    ViewData["Title"] = "Integrations";
+}
+
+<div id="app" v-cloak>
+    <div class="ig-wrap">
+        <div class="an-card">
+            <div class="an-head"><h6><i class="fas fa-key me-2" style="color:var(--primary)"></i>API keys <small>let another system read stock and shipments</small></h6></div>
+            <div v-if="state.newKey" class="alert alert-success small">
+                New key for <b>{{ state.newKey.name }}</b>. Copy it now, it cannot be shown again:
+                <div class="ig-secret">{{ state.newKey.value }}</div>
+                <button class="btn btn-sm btn-outline-success mt-1" @@click="handler.copy(state.newKey.value)">Copy</button>
+            </div>
+            <table class="table table-sm align-middle" v-if="state.keys.length">
+                <thead><tr><th>Name</th><th>Key</th><th>Last used</th><th></th></tr></thead>
+                <tbody><tr v-for="k in state.keys" :key="k.id"><td>{{ k.name }}</td><td><code>{{ k.keyPrefix }}...</code></td><td>{{ methods.when(k.lastUsedAtUtc) }}</td><td class="text-end"><button class="btn btn-sm btn-outline-danger" @@click="handler.revoke(k)">Revoke</button></td></tr></tbody>
+            </table>
+            <div v-else class="text-muted small mb-2">No keys yet.</div>
+            <div class="d-flex gap-2"><input class="form-control form-control-sm" v-model="state.keyName" maxlength="100" placeholder="Name, for example Online shop"><button class="btn btn-sm btn-primary text-nowrap" @@click="handler.createKey()"><i class="fas fa-plus me-1"></i> New key</button></div>
+            <details class="mt-3 small">
+                <summary>How another system uses a key</summary>
+                <pre class="ig-code">GET {{ origin }}/api/integration/stock?sku=PRD-0001
+GET {{ origin }}/api/integration/shipments/SHP-0001
+Header:  X-Api-Key: &lt;your key&gt;</pre>
+                <div class="text-muted">Both calls are read only. Stock is the on-hand quantity per warehouse.</div>
+            </details>
+        </div>
+
+        <div class="an-card">
+            <div class="an-head"><h6><i class="fas fa-bell me-2" style="color:var(--primary)"></i>Webhooks <small>we notify your system when something happens</small></h6></div>
+            <div v-for="h in state.webhooks" :key="h.id" class="ig-hook">
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <b>{{ h.name }}</b> <span class="badge" :class="h.isActive ? 'bg-success' : 'bg-secondary'">{{ h.isActive ? 'on' : 'off' }}</span>
+                    <span class="ms-auto d-flex gap-1">
+                        <button class="btn btn-sm btn-outline-primary" @@click="handler.test(h)">Send test</button>
+                        <button class="btn btn-sm btn-outline-secondary" @@click="handler.toggleHook(h)">{{ h.isActive ? 'Turn off' : 'Turn on' }}</button>
+                        <button class="btn btn-sm btn-outline-danger" @@click="handler.removeHook(h)"><i class="fas fa-times"></i></button>
+                    </span>
+                </div>
+                <div class="small text-muted text-break">{{ h.url }}</div>
+                <div class="small">Events: {{ h.events }}</div>
+                <div class="small">Signing secret: <code>{{ h.secret }}</code> <a href="#" @@click.prevent="handler.copy(h.secret)">copy</a></div>
+                <div class="small text-muted" v-if="h.lastStatus">Last delivery: {{ h.lastStatus }} ({{ methods.when(h.lastAtUtc) }})</div>
+            </div>
+            <div v-if="!state.webhooks.length" class="text-muted small mb-2">No webhooks yet.</div>
+            <hr>
+            <div class="ig-form">
+                <div><label class="ig-label">Name</label><input class="form-control form-control-sm" v-model="state.hook.name" maxlength="100"></div>
+                <div class="ig-wide"><label class="ig-label">Address that receives the notification</label><input class="form-control form-control-sm" v-model="state.hook.url" maxlength="500" placeholder="https://example.com/hooks/whms"></div>
+                <div class="ig-wide"><label class="ig-label">Events</label>
+                    <div class="d-flex flex-wrap gap-3"><label v-for="e in state.events" :key="e" class="small"><input type="checkbox" :value="e" v-model="state.hook.events"> {{ e }}</label></div>
+                </div>
+            </div>
+            <button class="btn btn-sm btn-primary mt-2" @@click="handler.addHook()"><i class="fas fa-plus me-1"></i> Add webhook</button>
+            <div class="small text-muted mt-2">Each call is a JSON POST. The <code>X-WHMS-Signature</code> header holds <code>sha256=</code> plus an HMAC-SHA256 of the body made with the signing secret, so your system can check it really came from here.</div>
+        </div>
+
+        <div class="an-card">
+            <div class="an-head"><h6><i class="fas fa-link me-2" style="color:var(--primary)"></i>Customer tracking links <small>no login needed to open them</small></h6></div>
+            <table class="table table-sm align-middle mb-0" v-if="state.shipments.length">
+                <thead><tr><th>Shipment</th><th>Order</th><th>Status</th><th>Carrier</th><th></th></tr></thead>
+                <tbody><tr v-for="s in state.shipments" :key="s.id"><td>{{ s.number }}</td><td>{{ s.orderNumber }}</td><td>{{ s.status }}</td><td>{{ s.carrier }}</td>
+                    <td class="text-end text-nowrap"><button class="btn btn-sm btn-outline-primary" @@click="handler.link(s)"><i class="fas fa-copy me-1"></i> Copy link</button></td></tr></tbody>
+            </table>
+            <div v-else class="text-muted small">Shipments appear here once they are created on the Packing & Shipping page.</div>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .ig-wrap { max-width: 980px; margin: 1rem auto; padding: 0 1rem; display: grid; gap: 1rem; }
+        .ig-label { display: block; font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: .2rem; }
+        .ig-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .7rem; }
+        .ig-wide { grid-column: 1 / -1; }
+        .ig-hook { border: 1px solid var(--line); border-radius: 10px; padding: .6rem .8rem; margin-bottom: .6rem; background: var(--surface-2); }
+        .ig-secret { font-family: monospace; word-break: break-all; padding: .4rem .6rem; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; margin-top: .3rem; }
+        .ig-code { background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: .6rem; overflow: auto; }
+    </style>
+    <script src="~/FrontEnd/Pages/Users/Integrations.cshtml.js"></script>
+}

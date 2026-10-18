@@ -1,0 +1,117 @@
+@page
+@attribute [Authorize(Roles = "Warehouses")]
+@{
+    ViewData["Title"] = "Pick List";
+}
+
+<div id="app" v-cloak>
+    <div class="pk-layout">
+        <div class="an-card">
+            <div class="an-head"><h6><i class="fas fa-dolly me-2" style="color:var(--primary)"></i>Delivery orders <small>to pick</small></h6></div>
+            <input type="search" class="form-control form-control-sm mb-2" v-model="state.search" placeholder="Search number or customer">
+            <div v-if="state.loading" class="text-muted small py-3">Loading...</div>
+            <div v-else-if="!methods.orders().length" class="text-muted small py-3">No open delivery orders.</div>
+            <button v-for="o in methods.orders()" :key="o.id" type="button" class="pk-order" :class="{ on: state.selected === o.id }" @@click="handler.select(o.id)">
+                <div class="d-flex justify-content-between"><b>{{ o.number }}</b><span class="badge" :class="methods.badge(o)">{{ methods.label(o) }}</span></div>
+                <small class="text-muted">{{ o.customer || 'No customer' }} &middot; {{ methods.day(o.deliveryDate) }}</small>
+                <div class="pk-bar"><i :style="{ width: methods.pct(o) + '%' }"></i></div>
+            </button>
+        </div>
+
+        <div class="an-card">
+            <div v-if="!state.selected" class="text-muted py-5 text-center">Choose a delivery order on the left to see where to pick each item from.</div>
+            <template v-else>
+                <div class="an-head">
+                    <h6>{{ methods.current()?.number }} <small>{{ state.warehouseName || '' }}</small></h6>
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        <div class="pk-toggle">
+                            <button type="button" :class="{ on: state.view === 'product' }" @@click="state.view = 'product'">By product</button>
+                            <button type="button" :class="{ on: state.view === 'zone' }" @@click="state.view = 'zone'">By zone</button>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="!methods.route().length" @@click="handler.print()"><i class="fas fa-print me-1"></i> Print pick sheet</button>
+                        <button type="button" class="btn btn-sm btn-primary" :disabled="state.saving || !methods.total()" @@click="handler.confirm()"><i class="fas fa-check me-1"></i> Confirm pick ({{ methods.n(methods.total()) }} units)</button>
+                    </div>
+                </div>
+
+                <div v-if="state.view === 'zone'">
+                    <div v-if="!methods.route().length" class="text-muted small py-3">Nothing left to pick from storage locations on this order.</div>
+                    <div v-for="z in methods.route()" :key="z.zone" class="pk-line">
+                        <div class="d-flex justify-content-between flex-wrap">
+                            <div><i class="fas fa-map-marker-alt me-1" style="color:var(--primary)"></i><b>Zone {{ z.zone }}</b></div>
+                            <div class="small text-muted">{{ z.stops }} stop(s) &middot; {{ methods.n(z.units) }} units</div>
+                        </div>
+                        <table class="table table-sm mb-0 mt-2">
+                            <thead><tr><th>Location</th><th>Product</th><th class="text-end">In stock</th><th class="text-end" style="width:130px">Pick</th></tr></thead>
+                            <tbody>
+                                <tr v-for="r in z.rows" :key="r.key">
+                                    <td class="fw-semibold">{{ r.code }}</td>
+                                    <td>{{ r.productName }} <small class="text-muted">{{ r.productNumber }}</small></td>
+                                    <td class="text-end">{{ methods.n(r.quantity) }}</td>
+                                    <td><input type="number" min="0" :max="r.quantity" step="any" class="form-control form-control-sm text-end" v-model.number="state.qty[r.key]"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div v-for="l in state.lines.filter(x => x.remaining > 0 && !x.sources.length)" :key="l.productId" class="small text-warning mb-1">{{ l.productName }}: not in any storage location, {{ methods.n(l.remaining) }} still needed.</div>
+                </div>
+
+                <div v-if="state.view === 'product'" v-for="l in state.lines" :key="l.productId" class="pk-line">
+                    <div class="d-flex justify-content-between flex-wrap">
+                        <div><b>{{ l.productName }}</b> <small class="text-muted">{{ l.productNumber }}</small></div>
+                        <div class="small">Need {{ methods.n(l.needed) }} &middot; picked {{ methods.n(l.picked) }} &middot; <b :class="l.remaining > 0 ? 'text-warning' : 'text-success'">{{ methods.n(l.remaining) }} to go</b></div>
+                    </div>
+                    <div v-if="l.remaining <= 0" class="small text-success mt-1"><i class="fas fa-check-circle me-1"></i>Fully picked</div>
+                    <table v-else class="table table-sm mb-0 mt-2">
+                        <thead><tr><th>Location</th><th>Zone</th><th class="text-end">In stock</th><th class="text-end" style="width:130px">Pick</th></tr></thead>
+                        <tbody>
+                            <tr v-if="!l.sources.length"><td colspan="4" class="text-muted">Not in any storage location yet. {{ l.unplaced > 0 ? methods.n(l.unplaced) + ' units are in the warehouse but not put away.' : '' }}</td></tr>
+                            <tr v-for="s in l.sources" :key="s.locationId">
+                                <td class="fw-semibold">{{ s.code }}</td><td>{{ s.zone }}</td><td class="text-end">{{ methods.n(s.quantity) }}</td>
+                                <td><input type="number" min="0" :max="s.quantity" step="any" class="form-control form-control-sm text-end" v-model.number="state.qty[l.productId + '|' + s.locationId]"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div v-if="l.remaining > 0 && l.batches.length" class="mt-2">
+                        <div class="small fw-bold text-uppercase text-muted">Batches, first expiry first</div>
+                        <table class="table table-sm mb-0">
+                            <thead><tr><th>Batch</th><th>Expires</th><th class="text-end">In stock</th><th class="text-end" style="width:130px">Take</th></tr></thead>
+                            <tbody>
+                                <tr v-for="b in l.batches" :key="b.batchId" :class="{ 'text-muted': b.expired }">
+                                    <td class="fw-semibold">{{ b.batchNumber }}</td>
+                                    <td>{{ methods.expiry(b) }}</td>
+                                    <td class="text-end">{{ methods.n(b.quantity) }}</td>
+                                    <td><input v-if="!b.expired" type="number" min="0" :max="b.quantity" step="any" class="form-control form-control-sm text-end" v-model.number="state.bqty[l.productId + '|' + b.batchId]"><span v-else class="small text-danger">Expired, do not ship</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div v-if="l.remaining > 0 && l.unplaced > 0 && l.sources.length" class="small text-muted mt-1">{{ methods.n(l.unplaced) }} more units are in the warehouse but not put away in a location.</div>
+                </div>
+
+                <div v-if="state.history.length" class="mt-3">
+                    <div class="small fw-bold text-uppercase text-muted mb-1">Already picked</div>
+                    <table class="table table-sm mb-0">
+                        <tbody><tr v-for="(h, i) in state.history" :key="i"><td class="text-nowrap">{{ methods.when(h.at) }}</td><td>{{ h.productName }}</td><td>{{ h.locationCode }}</td><td class="text-end">{{ methods.n(h.quantity) }}</td><td>{{ methods.user(h.userId) }}</td></tr></tbody>
+                    </table>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .pk-layout { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; gap: 1rem; margin: 1rem 1.5rem; align-items: start; }
+        .pk-order { display: block; width: 100%; text-align: left; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 10px; padding: .6rem .8rem; margin-bottom: .5rem; cursor: pointer; }
+        .pk-order.on { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(11,127,114,.18); }
+        .pk-bar { height: 5px; border-radius: 4px; background: var(--line); margin-top: .4rem; overflow: hidden; }
+        .pk-bar i { display: block; height: 100%; background: var(--primary); }
+        .pk-line { border: 1px solid var(--line); border-radius: 12px; padding: .8rem 1rem; margin-bottom: .8rem; background: var(--surface-2); }
+        .pk-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+        .pk-toggle button { border: 0; background: var(--surface); color: var(--ink); padding: .3rem .85rem; font-size: .8rem; cursor: pointer; }
+        .pk-toggle button.on { background: var(--primary); color: #fff; }
+        @@media (max-width: 991px) { .pk-layout { grid-template-columns: 1fr; } }
+    </style>
+    <script src="~/FrontEnd/Pages/Warehouses/PickList.cshtml.js"></script>
+}

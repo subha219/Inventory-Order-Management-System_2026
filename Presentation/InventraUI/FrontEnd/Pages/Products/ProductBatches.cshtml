@@ -1,0 +1,114 @@
+@page
+@attribute [Authorize(Roles = "Products")]
+@{
+    ViewData["Title"] = "Batches & Expiry";
+}
+
+<div id="app" v-cloak>
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Batches tracked</div><div class="fs-3 fw-bold">{{ state.summary.batchCount }}</div></div></div></div>
+        <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Expired batches</div><div class="fs-3 fw-bold text-danger">{{ state.summary.expiredBatches }}</div><div class="small text-muted">~{{ methods.num(state.summary.expiredUnits) }} units still in stock</div></div></div></div>
+        <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Expiring in {{ state.expiringDays }} days</div><div class="fs-3 fw-bold text-warning">{{ state.summary.expiringBatches }}</div><div class="small text-muted">~{{ methods.num(state.summary.expiringUnits) }} units</div></div></div></div>
+        <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Remaining estimate</div><div class="small">Assumes first-expired-first-out against current stock.</div></div></div></div>
+    </div>
+
+    <div class="card">
+        <div class="card-header d-flex flex-wrap gap-2 align-items-center justify-content-between">
+            <h5 class="mb-0"><i class="fas fa-vial me-1"></i> Batches &amp; expiry</h5>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <div class="btn-group btn-group-sm">
+                    <button type="button" class="btn" :class="state.filter===f.key ? 'btn-primary' : 'btn-outline-secondary'" v-for="f in state.filters" :key="f.key" @@click="state.filter=f.key">{{ f.label }}</button>
+                </div>
+                <input v-model="state.search" type="search" class="form-control form-control-sm" style="width:200px" placeholder="Search product / batch">
+                <button type="button" class="btn btn-sm btn-primary" @@click="handler.openNew()"><i class="fas fa-plus me-1"></i> Add batch</button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Product</th><th>Batch / Lot</th><th>Warehouse</th><th>Manufactured</th><th>Expiry</th>
+                            <th class="text-end">Received</th><th class="text-end">Est. remaining</th><th>Status</th><th style="width:110px"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-if="state.loading"><td colspan="9" class="text-center text-muted py-4">Loading...</td></tr>
+                        <tr v-else-if="filtered.length === 0"><td colspan="9" class="text-center text-muted py-4">No batches to show. Use "Add batch" to record a lot with its expiry date.</td></tr>
+                        <tr v-for="b in filtered" :key="b.id">
+                            <td><div class="fw-semibold">{{ b.productName }}</div><div class="small text-muted">{{ b.productNumber }}</div></td>
+                            <td>{{ b.batchNumber }}</td>
+                            <td>{{ b.warehouseName || '-' }}</td>
+                            <td>{{ methods.date(b.manufactureDate) }}</td>
+                            <td>{{ methods.date(b.expiryDate) }}<div class="small text-muted" v-if="b.daysToExpiry !== null">{{ methods.days(b.daysToExpiry) }}</div></td>
+                            <td class="text-end">{{ methods.num(b.quantity) }}</td>
+                            <td class="text-end fw-semibold">{{ methods.num(b.estimatedRemaining) }}</td>
+                            <td><span class="badge" :class="methods.badge(b.status)">{{ methods.label(b.status) }}</span></td>
+                            <td class="text-end">
+                                <button type="button" class="btn btn-sm btn-outline-secondary me-1" title="Edit" @@click="handler.openEdit(b)"><i class="fas fa-pen"></i></button>
+                                <button type="button" class="btn btn-sm btn-outline-danger" title="Delete" @@click="handler.remove(b)"><i class="fas fa-trash"></i></button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" ref="modalRef" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">{{ state.form.id ? 'Edit batch' : 'Add batch' }}</h5>
+                    <button type="button" class="btn-close" @@click="handler.close()"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Product</label>
+                        <select class="form-select" v-model="state.form.productId">
+                            <option value="">Select product...</option>
+                            <option v-for="p in state.products" :key="p.id" :value="p.id">{{ p.number }} - {{ p.name }}</option>
+                        </select>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Batch / lot number</label>
+                            <input type="text" class="form-control" v-model="state.form.batchNumber">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Warehouse</label>
+                            <select class="form-select" v-model="state.form.warehouseId">
+                                <option value="">Any / not specified</option>
+                                <option v-for="w in state.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Manufactured</label>
+                            <input type="date" class="form-control" v-model="state.form.manufactureDate">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Expiry date</label>
+                            <input type="date" class="form-control" v-model="state.form.expiryDate">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Quantity received</label>
+                            <input type="number" min="0" step="any" class="form-control" v-model.number="state.form.quantity">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Notes</label>
+                            <textarea class="form-control" rows="2" v-model="state.form.notes"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" @@click="handler.close()">Cancel</button>
+                    <button type="button" class="btn btn-primary" :disabled="state.saving" @@click="handler.save()">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <script src="~/FrontEnd/Pages/Products/ProductBatches.cshtml.js"></script>
+}

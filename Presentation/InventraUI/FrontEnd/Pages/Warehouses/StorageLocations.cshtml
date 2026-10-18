@@ -1,0 +1,291 @@
+@page
+@attribute [Authorize(Roles = "Warehouses")]
+@{
+    ViewData["Title"] = "Storage Locations";
+}
+
+<link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+<style>
+    .sl-wrap { padding: 1.25rem 1.5rem; }
+    .sl-bar { display: flex; flex-wrap: wrap; gap: .75rem; align-items: end; justify-content: space-between; margin-bottom: 1rem; }
+    .sl-bar label { display: block; font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: .25rem; }
+    .sl-tiles { grid-template-columns: repeat(5, minmax(0, 1fr)); margin-bottom: 1rem; }
+    .sl-zones { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .8rem; }
+    .sl-zone .nm { display: flex; justify-content: space-between; font-weight: 700; color: var(--text); }
+    .sl-zone .sub { font-size: .78rem; color: var(--muted); margin-top: .2rem; }
+    .sl-meter { height: 8px; border-radius: 8px; background: var(--surface-2); overflow: hidden; margin-top: .45rem; }
+    .sl-meter span { display: block; height: 100%; border-radius: 8px; background: var(--primary); }
+    .sl-meter span.mid { background: #5fb3a6; } .sl-meter span.high { background: var(--amber); } .sl-meter span.full { background: var(--bad); }
+    .sl-tabs { display: inline-flex; padding: 3px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); }
+    .sl-tabs button { border: 0; background: transparent; color: var(--muted); font-weight: 600; font-size: .85rem; padding: .35rem 1rem; border-radius: 8px; cursor: pointer; }
+    .sl-tabs button.on { background: var(--primary); color: #fff; }
+    .sl-legend { display: flex; flex-wrap: wrap; gap: .9rem; font-size: .78rem; color: var(--muted); margin: .8rem 0 .4rem; }
+    .sl-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 4px; margin-right: .3rem; vertical-align: -1px; }
+    .sl-zonehead { font-family: var(--font-display); font-weight: 700; font-size: 1.1rem; margin: 1rem 0 .3rem; color: var(--text); }
+    .sl-aisle { display: flex; gap: .75rem; align-items: flex-start; margin-bottom: .55rem; }
+    .sl-aisle .lb { flex: none; width: 64px; font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding-top: .55rem; }
+    .sl-cells { display: flex; flex-wrap: wrap; gap: 6px; }
+    .sl-cell { position: relative; width: 74px; height: 54px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface-2); cursor: pointer; padding: 5px 6px; overflow: hidden; text-align: left; color: var(--text); transition: transform .12s, box-shadow .12s; }
+    .sl-cell:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); z-index: 2; }
+    .sl-cell .c { font-size: .66rem; font-weight: 700; letter-spacing: .02em; }
+    .sl-cell .q { font-size: .72rem; color: var(--muted); }
+    .sl-cell .f { position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: rgba(0,0,0,.06); }
+    .sl-cell .f span { display: block; height: 100%; background: var(--primary); }
+    .sl-cell.low { background: color-mix(in srgb, var(--primary) 10%, var(--surface)); }
+    .sl-cell.mid { background: color-mix(in srgb, var(--primary) 22%, var(--surface)); }
+    .sl-cell.high { background: color-mix(in srgb, var(--amber) 28%, var(--surface)); } .sl-cell.high .f span { background: var(--amber); }
+    .sl-cell.full { background: color-mix(in srgb, var(--bad) 24%, var(--surface)); border-color: var(--bad); } .sl-cell.full .f span { background: var(--bad); }
+    .sl-cell.info { background: color-mix(in srgb, #4f7cff 16%, var(--surface)); }
+    .sl-cell.off { opacity: .45; background: repeating-linear-gradient(-45deg, var(--surface-2) 0 6px, var(--surface) 6px 12px); }
+    .sl-lg-empty { background: var(--surface-2); border: 1px solid var(--line); } .sl-lg-low { background: color-mix(in srgb, var(--primary) 16%, var(--surface)); } .sl-lg-mid { background: color-mix(in srgb, var(--primary) 35%, var(--surface)); }
+    .sl-lg-high { background: var(--amber); } .sl-lg-full { background: var(--bad); } .sl-lg-info { background: #4f7cff; }
+    .sl-empty { text-align: center; padding: 2.5rem 1rem; color: var(--muted); }
+    .sl-empty i { font-size: 1.8rem; display: block; margin-bottom: .5rem; opacity: .5; }
+    .sl-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+    .sl-form .full { grid-column: 1 / -1; }
+    .sl-form label { font-size: .75rem; font-weight: 700; color: var(--muted); margin-bottom: .2rem; display: block; }
+    .sl-sug { font-size: .8rem; color: var(--muted); }
+    @@media (max-width: 1199px) { .sl-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @@media (max-width: 575px) { .sl-aisle { flex-direction: column; gap: .2rem; } .sl-aisle .lb { padding-top: 0; } .sl-form { grid-template-columns: 1fr; } }
+</style>
+
+<div id="app" v-cloak>
+    <div class="sl-wrap">
+        <div class="sl-bar">
+            <div style="min-width:240px">
+                <label>Warehouse</label>
+                <select class="form-select" v-model="state.warehouseId" @@change="handler.load()">
+                    <option value="">All warehouses</option>
+                    <option v-for="w in state.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
+                </select>
+            </div>
+            <div class="sl-tabs">
+                <button type="button" v-for="t in state.tabs" :key="t.key" :class="{ on: state.tab === t.key }" @@click="state.tab = t.key">{{ t.label }}<span v-if="t.key === 'unplaced' && state.summary.unplacedUnits > 0"> ({{ methods.num(state.summary.unplacedUnits) }})</span></button>
+            </div>
+            <div class="d-flex" style="gap:.5rem">
+                <button type="button" class="btn btn-outline-primary" :disabled="!state.warehouseId" @@click="handler.openGenerate()"><i class="fas fa-magic me-1"></i> Generate locations</button>
+                <button type="button" class="btn btn-primary" :disabled="!state.warehouseId" @@click="handler.openForm()"><i class="fas fa-plus me-1"></i> Add location</button>
+            </div>
+        </div>
+        <div v-if="!state.warehouseId" class="small text-muted mb-3"><i class="fas fa-info-circle me-1"></i> Pick a warehouse to add or generate locations and to see stock that has not been put away yet.</div>
+
+        <div class="an-grid sl-tiles">
+            <div class="an-card stat" style="--sc:#0b7f72"><span class="stat-ico"><i class="fas fa-th"></i></span><div><div class="stat-l">Locations</div><div class="stat-v">{{ state.summary.totalLocations }}</div><div class="stat-s">{{ state.summary.activeLocations }} active</div></div></div>
+            <div class="an-card stat" style="--sc:#4f7cff"><span class="stat-ico"><i class="fas fa-percent"></i></span><div><div class="stat-l">Capacity used</div><div class="stat-v">{{ state.summary.utilizationPercent }}%</div><div class="stat-s">{{ methods.num(state.summary.totalUsed) }} of {{ methods.num(state.summary.totalCapacity) }} units</div></div></div>
+            <div class="an-card stat" style="--sc:#8da1b4"><span class="stat-ico"><i class="far fa-square"></i></span><div><div class="stat-l">Empty locations</div><div class="stat-v">{{ state.summary.emptyLocations }}</div><div class="stat-s">ready for put-away</div></div></div>
+            <div class="an-card stat" style="--sc:#d93f45"><span class="stat-ico"><i class="fas fa-box"></i></span><div><div class="stat-l">Nearly full</div><div class="stat-v">{{ state.summary.fullLocations }}</div><div class="stat-s">95% or more</div></div></div>
+            <div class="an-card stat" style="--sc:#e08a00"><span class="stat-ico"><i class="fas fa-dolly"></i></span><div><div class="stat-l">Not put away</div><div class="stat-v">{{ state.warehouseId ? methods.num(state.summary.unplacedUnits) : '-' }}</div><div class="stat-s">units on hand, no location</div></div></div>
+        </div>
+
+        <div class="an-card mb-3" v-if="state.zones.length">
+            <h6>Utilization by zone</h6>
+            <div class="sl-zones">
+                <div class="sl-zone" v-for="z in state.zones" :key="z.zone">
+                    <div class="nm"><span>Zone {{ z.zone }}</span><span>{{ z.capacity > 0 ? z.percent + '%' : '-' }}</span></div>
+                    <div class="sl-meter"><span :class="methods.band(z.percent)" :style="{ width: Math.min(z.percent, 100) + '%' }"></span></div>
+                    <div class="sub">{{ z.locations }} locations, {{ z.empty }} empty<span v-if="z.capacity > 0"> &middot; {{ methods.num(z.used) }}/{{ methods.num(z.capacity) }} units</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MAP -->
+        <div class="an-card" v-show="state.tab === 'map'">
+            <div class="an-head"><h6>Warehouse map <small>click a location to see and manage its contents</small></h6>
+                <input type="search" class="form-control form-control-sm" style="width:200px" v-model="state.search" placeholder="Find code or product"></div>
+            <div class="sl-legend">
+                <span><i class="sl-lg-empty"></i>Empty</span><span><i class="sl-lg-low"></i>Under 50%</span><span><i class="sl-lg-mid"></i>50-80%</span>
+                <span><i class="sl-lg-high"></i>80-95%</span><span><i class="sl-lg-full"></i>Full</span><span><i class="sl-lg-info"></i>No capacity set</span>
+            </div>
+            <div v-if="state.loading" class="sl-empty">Loading...</div>
+            <div v-else-if="!filtered.length" class="sl-empty"><i class="fas fa-th"></i>No locations yet. Use <strong>Generate locations</strong> to create a whole zone in one step, or <strong>Add location</strong> for a single one.</div>
+            <template v-else>
+                <div v-for="z in mapGroups" :key="z.zone">
+                    <div class="sl-zonehead">Zone {{ z.zone }}</div>
+                    <div class="sl-aisle" v-for="a in z.aisles" :key="a.aisle">
+                        <div class="lb">Aisle {{ a.aisle }}</div>
+                        <div class="sl-cells">
+                            <button type="button" class="sl-cell" v-for="l in a.items" :key="l.id" :class="methods.cellClass(l)" :title="methods.tip(l)" @@click="handler.openDetail(l.id)">
+                                <div class="c">{{ methods.shortCode(l) }}</div>
+                                <div class="q">{{ l.used > 0 ? methods.num(l.used) : '' }}</div>
+                                <div class="f" v-if="l.utilization !== null"><span :style="{ width: Math.min(l.utilization, 100) + '%' }"></span></div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- LIST -->
+        <div class="an-card" v-show="state.tab === 'list'">
+            <div class="an-head"><h6>All locations</h6>
+                <div class="d-flex" style="gap:.5rem">
+                    <select class="form-select form-select-sm" v-model="state.statusFilter"><option value="">All</option><option value="empty">Empty</option><option value="used">In use</option><option value="full">Nearly full</option><option value="inactive">Inactive</option></select>
+                    <input type="search" class="form-control form-control-sm" style="width:200px" v-model="state.search" placeholder="Find code or product">
+                </div></div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead><tr><th>Code</th><th>Warehouse</th><th>Zone / Aisle / Rack / Shelf / Bin</th><th>Type</th><th class="text-end">Capacity</th><th class="text-end">Used</th><th style="width:150px">Utilization</th><th>Contents</th></tr></thead>
+                    <tbody>
+                        <tr v-if="!filtered.length"><td colspan="8" class="text-center text-muted py-4">No locations match.</td></tr>
+                        <tr v-for="l in filtered" :key="l.id" style="cursor:pointer" @@click="handler.openDetail(l.id)">
+                            <td class="fw-semibold">{{ l.code }} <span v-if="!l.isActive" class="badge bg-secondary">inactive</span></td>
+                            <td>{{ l.warehouseName }}</td>
+                            <td class="text-muted small">{{ [l.zone, l.aisle, l.rack, l.shelf, l.bin].map(v => v || '-').join(' / ') }}</td>
+                            <td>{{ l.locationType }}</td>
+                            <td class="text-end">{{ l.capacity ? methods.num(l.capacity) : '-' }}</td>
+                            <td class="text-end">{{ methods.num(l.used) }}</td>
+                            <td><div class="sl-meter" v-if="l.utilization !== null"><span :class="methods.band(l.utilization)" :style="{ width: Math.min(l.utilization, 100) + '%' }"></span></div><small class="text-muted" v-if="l.utilization !== null">{{ l.utilization }}%</small></td>
+                            <td class="small text-muted">{{ l.items.length ? l.items.slice(0, 2).map(i => i.productName).join(', ') + (l.items.length > 2 ? ' +' + (l.items.length - 2) : '') : 'Empty' }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- UNPLACED -->
+        <div class="an-card" v-show="state.tab === 'unplaced'">
+            <div class="an-head"><h6>Stock not yet put away <small>on hand in the warehouse but not assigned to a location</small></h6></div>
+            <div v-if="!state.warehouseId" class="sl-empty"><i class="fas fa-warehouse"></i>Select a warehouse above to see its unplaced stock.</div>
+            <div v-else-if="!state.unplaced.length" class="sl-empty"><i class="fas fa-check-circle" style="color:var(--good);opacity:1"></i>Everything on hand has a location.</div>
+            <div class="table-responsive" v-else>
+                <table class="table table-hover align-middle mb-0">
+                    <thead><tr><th>Product</th><th class="text-end">On hand</th><th class="text-end">Placed</th><th class="text-end">Not put away</th><th></th></tr></thead>
+                    <tbody>
+                        <tr v-for="u in state.unplaced" :key="u.productId">
+                            <td><div class="fw-semibold">{{ u.productName }}</div><small class="text-muted">{{ u.productNumber }}</small></td>
+                            <td class="text-end">{{ methods.num(u.onHand) }}</td><td class="text-end">{{ methods.num(u.placed) }}</td>
+                            <td class="text-end fw-bold" style="color:var(--warn)">{{ methods.num(u.unplaced) }}</td>
+                            <td class="text-end"><button type="button" class="btn btn-sm btn-primary" @@click="handler.openPutAway({ productId: u.productId, quantity: u.unplaced })"><i class="fas fa-dolly me-1"></i> Put away</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Location detail -->
+    <div class="modal fade" ref="detailRef" tabindex="-1">
+        <div class="modal-dialog modal-lg"><div class="modal-content" v-if="selected">
+            <div class="modal-header">
+                <div><h5 class="modal-title">{{ selected.code }} <span v-if="!selected.isActive" class="badge bg-secondary">inactive</span></h5>
+                    <div class="small text-muted">{{ selected.warehouseName }} &middot; {{ [selected.zone, selected.aisle, selected.rack, selected.shelf, selected.bin].map(v => v || '-').join(' / ') }} &middot; {{ selected.locationType }}</div></div>
+                <button type="button" class="btn-close" @@click="handler.closeDetail()"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex justify-content-between small mb-1"><span>{{ methods.num(selected.used) }} units stored</span><span>{{ selected.capacity ? 'capacity ' + methods.num(selected.capacity) + ' (free ' + methods.num(Math.max(selected.capacity - selected.used, 0)) + ')' : 'no capacity limit' }}</span></div>
+                <div class="sl-meter" v-if="selected.utilization !== null"><span :class="methods.band(selected.utilization)" :style="{ width: Math.min(selected.utilization, 100) + '%' }"></span></div>
+                <div class="small text-muted mt-2" v-if="selected.notes">{{ selected.notes }}</div>
+                <table class="table align-middle mt-3 mb-0">
+                    <thead><tr><th>Product</th><th class="text-end" style="width:140px">Quantity</th><th style="width:210px"></th></tr></thead>
+                    <tbody>
+                        <tr v-if="!selected.items.length"><td colspan="3" class="text-center text-muted py-3">Nothing stored here yet.</td></tr>
+                        <tr v-for="i in selected.items" :key="i.productId">
+                            <td><div class="fw-semibold">{{ i.productName }}</div><small class="text-muted">{{ i.productNumber }}</small></td>
+                            <td><input type="number" min="0" step="any" class="form-control form-control-sm text-end" v-model.number="state.edits[i.productId]" :placeholder="i.quantity"></td>
+                            <td class="text-end">
+                                <button type="button" class="btn btn-sm btn-outline-primary me-1" @@click="handler.saveQty(i)">Save</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary me-1" @@click="handler.openMove(i)">Move</button>
+                                <button type="button" class="btn btn-sm btn-outline-danger" @@click="handler.removeItem(i)" title="Remove from this location"><i class="fas fa-times"></i></button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <div><button type="button" class="btn btn-outline-danger btn-sm" @@click="handler.deleteLocation()"><i class="fas fa-trash me-1"></i> Delete</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm ms-1" @@click="handler.openForm(selected)"><i class="fas fa-pen me-1"></i> Edit location</button></div>
+                <button type="button" class="btn btn-primary" @@click="handler.openPutAway({ locationId: selected.id })"><i class="fas fa-plus me-1"></i> Put product here</button>
+            </div>
+        </div></div>
+    </div>
+
+    <!-- Put away -->
+    <div class="modal fade" ref="putRef" tabindex="-1">
+        <div class="modal-dialog"><div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Put away stock</h5><button type="button" class="btn-close" @@click="handler.closePut()"></button></div>
+            <div class="modal-body">
+                <div class="sl-form">
+                    <div class="full"><label>Product</label>
+                        <select class="form-select" v-model="state.put.productId" :disabled="state.put.lockProduct" @@change="handler.putChanged()">
+                            <option value="">Select product...</option>
+                            <option v-for="p in state.products" :key="p.id" :value="p.id">{{ p.number }} - {{ p.name }}</option>
+                        </select></div>
+                    <div class="full"><label>Location</label>
+                        <select class="form-select" v-model="state.put.locationId" :disabled="state.put.lockLocation">
+                            <option value="">Select location...</option>
+                            <option v-for="o in putOptions" :key="o.id" :value="o.id">{{ o.label }}</option>
+                        </select>
+                        <div class="sl-sug mt-1" v-if="!state.put.lockLocation && putOptions.length && putOptions[0].suggested"><i class="fas fa-lightbulb me-1" style="color:var(--amber)"></i> Suggested: {{ putOptions[0].code }} ({{ putOptions[0].why }})</div></div>
+                    <div><label>Quantity to add</label><input type="number" min="0" step="any" class="form-control" v-model.number="state.put.quantity"></div>
+                    <div class="sl-sug" style="align-self:end">{{ putHint }}</div>
+                </div>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" @@click="handler.closePut()">Cancel</button><button type="button" class="btn btn-primary" :disabled="state.saving" @@click="handler.savePut()">Put away</button></div>
+        </div></div>
+    </div>
+
+    <!-- Move -->
+    <div class="modal fade" ref="moveRef" tabindex="-1">
+        <div class="modal-dialog"><div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Move between locations</h5><button type="button" class="btn-close" @@click="handler.closeMove()"></button></div>
+            <div class="modal-body">
+                <div class="mb-2"><strong>{{ state.move.productName }}</strong> <span class="text-muted">from {{ state.move.fromCode }} ({{ methods.num(state.move.available) }} available)</span></div>
+                <div class="sl-form">
+                    <div class="full"><label>Destination</label>
+                        <select class="form-select" v-model="state.move.toLocationId">
+                            <option value="">Select location...</option>
+                            <option v-for="o in moveOptions" :key="o.id" :value="o.id">{{ o.label }}</option>
+                        </select></div>
+                    <div><label>Quantity</label><input type="number" min="0" step="any" class="form-control" v-model.number="state.move.quantity"></div>
+                </div>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" @@click="handler.closeMove()">Cancel</button><button type="button" class="btn btn-primary" :disabled="state.saving" @@click="handler.saveMove()">Move</button></div>
+        </div></div>
+    </div>
+
+    <!-- Location form -->
+    <div class="modal fade" ref="formRef" tabindex="-1">
+        <div class="modal-dialog"><div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">{{ state.form.id ? 'Edit location' : 'Add location' }}</h5><button type="button" class="btn-close" @@click="handler.closeForm()"></button></div>
+            <div class="modal-body">
+                <div class="sl-form">
+                    <div class="full"><label>Code (unique in the warehouse)</label><input type="text" class="form-control" v-model="state.form.code" placeholder="e.g. A-01-02-3-04"></div>
+                    <div><label>Zone</label><input type="text" class="form-control" v-model="state.form.zone"></div>
+                    <div><label>Aisle</label><input type="text" class="form-control" v-model="state.form.aisle"></div>
+                    <div><label>Rack</label><input type="text" class="form-control" v-model="state.form.rack"></div>
+                    <div><label>Shelf</label><input type="text" class="form-control" v-model="state.form.shelf"></div>
+                    <div><label>Bin</label><input type="text" class="form-control" v-model="state.form.bin"></div>
+                    <div><label>Type</label><select class="form-select" v-model="state.form.locationType"><option>Bin</option><option>Pallet</option><option>Floor</option><option>Overflow</option></select></div>
+                    <div><label>Capacity (units)</label><input type="number" min="0" step="any" class="form-control" v-model.number="state.form.capacity" placeholder="No limit"></div>
+                    <div class="d-flex align-items-end"><label class="mb-2"><input type="checkbox" class="me-2" v-model="state.form.isActive">Active</label></div>
+                    <div class="full"><label>Notes</label><textarea rows="2" class="form-control" v-model="state.form.notes"></textarea></div>
+                </div>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" @@click="handler.closeForm()">Cancel</button><button type="button" class="btn btn-primary" :disabled="state.saving" @@click="handler.saveForm()">Save</button></div>
+        </div></div>
+    </div>
+
+    <!-- Generator -->
+    <div class="modal fade" ref="genRef" tabindex="-1">
+        <div class="modal-dialog"><div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Generate locations</h5><button type="button" class="btn-close" @@click="handler.closeGenerate()"></button></div>
+            <div class="modal-body">
+                <p class="small text-muted">Creates a full grid of bins with codes like <strong>{{ (state.gen.zone || 'A').toUpperCase() }}-01-01-1-01</strong> (zone-aisle-rack-shelf-bin). Locations that already exist are skipped.</p>
+                <div class="sl-form">
+                    <div><label>Zone</label><input type="text" class="form-control" v-model="state.gen.zone" maxlength="20"></div>
+                    <div><label>Capacity per bin (units)</label><input type="number" min="0" step="any" class="form-control" v-model.number="state.gen.capacity" placeholder="No limit"></div>
+                    <div><label>Aisles</label><input type="number" min="1" max="50" class="form-control" v-model.number="state.gen.aisles"></div>
+                    <div><label>Racks per aisle</label><input type="number" min="1" max="50" class="form-control" v-model.number="state.gen.racks"></div>
+                    <div><label>Shelves per rack</label><input type="number" min="1" max="10" class="form-control" v-model.number="state.gen.shelves"></div>
+                    <div><label>Bins per shelf</label><input type="number" min="1" max="20" class="form-control" v-model.number="state.gen.bins"></div>
+                </div>
+                <div class="mt-3 fw-semibold">This will create up to {{ genTotal }} locations.</div>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" @@click="handler.closeGenerate()">Cancel</button><button type="button" class="btn btn-primary" :disabled="state.saving || genTotal > 2000" @@click="handler.saveGenerate()">Generate</button></div>
+        </div></div>
+    </div>
+</div>
+
+@section scripts {
+    <script src="~/FrontEnd/Pages/Warehouses/StorageLocations.cshtml.js"></script>
+}

@@ -1,0 +1,125 @@
+@page
+@attribute [Authorize(Roles = "Products")]
+@{
+    ViewData["Title"] = "Scan & Labels";
+}
+
+<div id="app" v-cloak>
+    <div class="row">
+        <!-- Scan -->
+        <div class="col-lg-5 mb-3">
+            <div class="card h-100">
+                <div class="card-header"><h5><i class="fas fa-barcode me-1"></i> Scan or search a product</h5></div>
+                <div class="card-body">
+                    <form @@submit.prevent="handler.lookup(state.query)">
+                        <div class="input-group mb-2">
+                            <input ref="queryRef" v-model="state.query" type="text" class="form-control form-control-lg"
+                                   placeholder="Scan barcode, or type product number / name" autocomplete="off" autofocus>
+                            <button class="btn btn-primary" type="submit"><i class="fas fa-search"></i></button>
+                        </div>
+                    </form>
+                    <small class="text-muted d-block mb-3">
+                        USB / Bluetooth scanners work here directly: click the box and scan. On a phone, use the camera.
+                    </small>
+
+                    <button type="button" class="btn btn-outline-primary me-2 mb-2" v-if="!state.scanning" @@click="handler.startCamera">
+                        <i class="fas fa-camera me-1"></i> Use camera
+                    </button>
+                    <button type="button" class="btn btn-outline-danger mb-2" v-else @@click="handler.stopCamera">
+                        <i class="fas fa-stop me-1"></i> Stop camera
+                    </button>
+                    <div class="text-danger small mb-2" v-if="state.cameraError">{{ state.cameraError }}</div>
+                    <div id="reader" style="width:100%; max-width:420px;" v-show="state.scanning"></div>
+
+                    <div v-if="state.matches.length > 1" class="mt-3">
+                        <div class="small text-muted mb-1">{{ state.matches.length }} matches, pick one:</div>
+                        <div class="list-group">
+                            <button type="button" class="list-group-item list-group-item-action"
+                                    v-for="m in state.matches" :key="m.id" @@click="handler.select(m)">
+                                {{ m.name }} <small class="text-muted">{{ m.number }}</small>
+                            </button>
+                        </div>
+                    </div>
+                    <div v-if="state.notFound" class="alert alert-warning mt-3 mb-0">
+                        No product found for <strong>{{ state.lastCode }}</strong>.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Result -->
+        <div class="col-lg-7 mb-3">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5>Product details</h5>
+                    <span v-if="state.loading" class="text-muted small">Loading data...</span>
+                </div>
+                <div class="card-body">
+                    <div v-if="!state.result" class="text-muted">Scan or search a product to see its stock and print a label.</div>
+                    <div v-else>
+                        <div class="d-flex justify-content-between flex-wrap">
+                            <div>
+                                <h4 class="mb-0">{{ state.result.name }}</h4>
+                                <div class="text-muted">{{ state.result.number }} &middot; {{ state.result.productGroupName }}</div>
+                            </div>
+                            <div class="text-end">
+                                <div class="h4 mb-0">{{ methods.money(state.result.unitPrice) }}</div>
+                                <div class="text-muted small">per {{ state.result.unitMeasureName || 'unit' }}</div>
+                            </div>
+                        </div>
+                        <hr>
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="h2 mb-0 me-3">{{ methods.num(state.totalStock) }}</div>
+                            <div>
+                                <div class="text-muted small">total on hand</div>
+                                <span class="badge" :class="state.status.cls">{{ state.status.text }}</span>
+                                <span class="text-muted small ms-1" v-if="state.result.reorderPoint != null">reorder point {{ methods.num(state.result.reorderPoint) }}</span>
+                            </div>
+                        </div>
+                        <table class="table table-sm" v-if="state.stockRows.length">
+                            <thead><tr><th>Warehouse</th><th class="text-end">On hand</th></tr></thead>
+                            <tbody>
+                                <tr v-for="r in state.stockRows" :key="r.warehouseId">
+                                    <td>{{ r.warehouseName }}</td>
+                                    <td class="text-end">{{ methods.num(r.stock) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div v-else class="text-muted small mb-2">No confirmed stock in any warehouse.</div>
+
+                        <div class="d-flex align-items-center flex-wrap">
+                            <label class="me-2 mb-0">Label copies</label>
+                            <input type="number" min="1" max="200" v-model.number="state.copies" class="form-control form-control-sm me-3" style="width:90px;">
+                            <button type="button" class="btn btn-primary btn-sm" @@click="handler.printOne">
+                                <i class="fas fa-print me-1"></i> Print label
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk labels -->
+    <div class="card">
+        <div class="card-header"><h5>Print labels for many products</h5></div>
+        <div class="card-body">
+            <div class="d-flex align-items-center flex-wrap mb-2">
+                <div class="form-check me-3">
+                    <input class="form-check-input" type="checkbox" id="onlyStock" v-model="state.onlyInStock">
+                    <label class="form-check-label" for="onlyStock">Only products with stock</label>
+                </div>
+                <button type="button" class="btn btn-outline-primary btn-sm" @@click="handler.printAll">
+                    <i class="fas fa-print me-1"></i> Print {{ state.bulkCount }} labels (1 per product)
+                </button>
+            </div>
+            <small class="text-muted">Labels use Code 128 barcodes of the product number. Peel-and-stick label sheets: set your printer to "Actual size" (100%).</small>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <script src="~/lib/jsbarcode/JsBarcode.all.min.js"></script>
+    <script src="~/lib/html5-qrcode/html5-qrcode.min.js"></script>
+    <script src="~/FrontEnd/Pages/Products/ProductScan.cshtml.js"></script>
+}

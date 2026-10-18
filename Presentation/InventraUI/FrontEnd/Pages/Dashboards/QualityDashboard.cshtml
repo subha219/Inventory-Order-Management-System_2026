@@ -1,0 +1,33 @@
+﻿@page
+@model InventraUI.FrontEnd.Pages.Dashboards.QualityDashboardModel
+@attribute [Authorize]
+@{
+    ViewData["Title"] = "Quality";
+    ViewData["HideHead"] = true;
+}
+
+<link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+<link href="~/css/persona.css" rel="stylesheet" asp-append-version="true" />
+
+<partial name="_PersonaBody" />
+
+@section scripts {
+    <script>
+        window.PERSONA = {
+            title: 'Quality',
+            subtitle: 'Here is what needs inspecting, holding or writing off.',
+            showUsers: false,
+            tiles: [
+            { title: 'Returns inspection', text: 'Check and decide on returned goods', icon: 'fa-undo', link: '/Warehouses/ReturnsInspection' },
+            { title: 'Stock holds', text: 'Quarantine and damaged stock', icon: 'fa-hand-paper', link: '/Warehouses/StockHolds' },
+            { title: 'Batches & expiry', text: 'Lots about to expire', icon: 'fa-hourglass-half', link: '/Products/ProductBatches' },
+            { title: 'Recall trace', text: 'Find every customer who got a lot', icon: 'fa-search-location', link: '/Products/RecallTrace' },
+            { title: 'Serial numbers', text: 'Trace single units', icon: 'fa-barcode', link: '/Products/SerialNumbers' },
+            { title: 'Scrapping', text: 'Write off goods that cannot be used', icon: 'fa-trash-alt', link: '/Scrappings/ScrappingList' },
+            { title: 'Sales returns', text: 'Goods coming back from customers', icon: 'fa-undo-alt', link: '/SalesReturns/SalesReturnList' },
+            { title: 'Purchase returns', text: 'Send faulty goods back to a supplier', icon: 'fa-reply', link: '/PurchaseReturns/PurchaseReturnList' }
+            ]
+        };
+    </script>
+    <script src="~/js/persona-dashboard.js" asp-append-version="true"></script>
+}

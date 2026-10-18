@@ -1,0 +1,76 @@
+@page
+@attribute [Authorize(Roles = "Users")]
+@{
+    ViewData["Title"] = "Scheduled Reports";
+}
+
+<div id="app" v-cloak>
+    <div class="an-card" style="margin:1rem 1.5rem">
+        <div class="an-head">
+            <h6><i class="fas fa-calendar-check me-2" style="color:var(--primary)"></i>Scheduled reports <small>e-mailed to your team automatically</small></h6>
+            <button type="button" class="btn btn-sm btn-primary" @@click="handler.newReport()"><i class="fas fa-plus me-1"></i> New schedule</button>
+        </div>
+        <div class="small text-muted mb-3">Times are in {{ methods.zone() }}. E-mail needs SmtpSettings to be filled in on the server. The server checks every 15 minutes, so a report goes out within about 15 minutes of its time.</div>
+
+        <div v-if="state.edit" class="sr-form">
+            <div class="sr-grid">
+                <div class="sr-wide"><label>Name</label><input type="text" class="form-control form-control-sm" v-model="state.edit.name" placeholder="e.g. Monday stock review"></div>
+                <div><label>Report</label>
+                    <select class="form-select form-select-sm" v-model="state.edit.reportType"><option v-for="t in state.types" :key="t.type" :value="t.type">{{ t.name }}</option></select></div>
+                <div><label>How often</label>
+                    <select class="form-select form-select-sm" v-model="state.edit.frequency"><option>Daily</option><option>Weekly</option><option>Monthly</option></select></div>
+                <div v-if="state.edit.frequency === 'Weekly'"><label>Day</label>
+                    <select class="form-select form-select-sm" v-model.number="state.edit.dayOfWeek"><option v-for="(d, i) in state.days" :key="i" :value="i">{{ d }}</option></select></div>
+                <div v-if="state.edit.frequency === 'Monthly'"><label>Day of month</label><input type="number" min="1" max="31" class="form-control form-control-sm" v-model.number="state.edit.dayOfMonth"></div>
+                <div><label>Time</label><input type="time" class="form-control form-control-sm" v-model="state.edit.time"></div>
+                <div v-if="methods.type(state.edit.reportType).usesWarehouse"><label>Warehouse</label>
+                    <select class="form-select form-select-sm" v-model="state.edit.warehouseId"><option value="">All warehouses</option><option v-for="w in state.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select></div>
+                <div v-if="methods.type(state.edit.reportType).usesSlowDays"><label>Slow after (days)</label><input type="number" min="1" class="form-control form-control-sm" v-model.number="state.edit.slowDays" placeholder="90"></div>
+                <div class="sr-full"><label>Send to (e-mail addresses, separated by commas)</label><input type="text" class="form-control form-control-sm" v-model="state.edit.recipients" placeholder="owner@yourcompany.com, manager@yourcompany.com"></div>
+                <div class="sr-full small text-muted">{{ methods.type(state.edit.reportType).description }}</div>
+            </div>
+            <div class="mt-2 d-flex justify-content-between align-items-center">
+                <label class="mb-0"><input type="checkbox" v-model="state.edit.enabled"> Active</label>
+                <div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary me-1" @@click="state.edit = null">Cancel</button>
+                    <button type="button" class="btn btn-sm btn-primary" :disabled="state.saving" @@click="handler.save()">Save schedule</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead><tr><th>Schedule</th><th>Report</th><th>Runs</th><th>Next</th><th>Last sent</th><th></th></tr></thead>
+                <tbody>
+                    <tr v-if="state.loading"><td colspan="6" class="text-center text-muted py-4">Loading...</td></tr>
+                    <tr v-else-if="!state.reports.length"><td colspan="6" class="text-center text-muted py-4">No scheduled reports yet. Use New schedule to add one.</td></tr>
+                    <tr v-for="r in state.reports" :key="r.id" :class="{ 'text-muted': !r.enabled }">
+                        <td><div class="fw-semibold">{{ r.name }}</div><small class="text-muted">{{ r.recipients }}</small></td>
+                        <td>{{ methods.type(r.reportType).name }}</td>
+                        <td>{{ methods.when(r) }}</td>
+                        <td>{{ r.enabled && r.nextRun ? methods.stamp(r.nextRun) : 'Paused' }}</td>
+                        <td class="small"><div v-if="r.lastSent">{{ methods.stamp(r.lastSent) }}</div><div :class="(r.lastStatus || '').startsWith('Failed') ? 'text-danger' : 'text-muted'">{{ r.lastStatus || 'Not sent yet' }}</div></td>
+                        <td class="text-end text-nowrap">
+                            <button type="button" class="btn btn-sm btn-outline-primary me-1" :disabled="state.saving" @@click="handler.sendNow(r)">Send now</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary me-1" @@click="handler.edit(r)">Edit</button>
+                            <button type="button" class="btn btn-sm btn-link text-muted" @@click="handler.remove(r)"><i class="fas fa-trash"></i></button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .sr-form { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 1rem; margin-bottom: 1rem; }
+        .sr-form label { display: block; font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: .25rem; }
+        .sr-form .mb-0 { text-transform: none; letter-spacing: 0; font-size: .85rem; color: var(--ink); font-weight: 500; }
+        .sr-grid { display: grid; grid-template-columns: repeat(4, minmax(140px, 1fr)); gap: .8rem; }
+        .sr-wide { grid-column: span 2; } .sr-full { grid-column: 1 / -1; }
+        @@media (max-width: 991px) { .sr-grid { grid-template-columns: 1fr 1fr; } }
+    </style>
+    <script src="~/FrontEnd/Pages/Users/ScheduledReports.cshtml.js"></script>
+}

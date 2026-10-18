@@ -1,0 +1,81 @@
+@page
+@attribute [Authorize(Roles = "Users,Auditor / Read-only")]
+@{
+    ViewData["Title"] = "Audit Log";
+}
+
+<div id="app" v-cloak>
+    <div class="an-card" style="margin:1rem 1.5rem">
+        <div class="an-head">
+            <h6><i class="fas fa-shield-alt me-2" style="color:var(--primary)"></i>Audit log <small>who changed what, and when</small></h6>
+            <button type="button" class="btn btn-sm btn-outline-primary" @@click="handler.exportCsv()" :disabled="!state.rows.length"><i class="fas fa-file-csv me-1"></i> Export CSV</button>
+        </div>
+
+        <div class="al-filters">
+            <div><label>Period</label>
+                <select class="form-select form-select-sm" v-model.number="state.days" @@change="handler.load()">
+                    <option :value="1">Last 24 hours</option><option :value="7">Last 7 days</option><option :value="30">Last 30 days</option><option :value="90">Last 90 days</option><option :value="365">Last year</option>
+                </select></div>
+            <div><label>Record type</label>
+                <select class="form-select form-select-sm" v-model="state.entityName" @@change="handler.load()">
+                    <option value="">All</option><option v-for="n in state.entityNames" :key="n" :value="n">{{ n }}</option>
+                </select></div>
+            <div><label>Action</label>
+                <select class="form-select form-select-sm" v-model="state.action" @@change="handler.load()">
+                    <option value="">All</option><option>Created</option><option>Updated</option><option>Deleted</option>
+                </select></div>
+            <div><label>User</label>
+                <select class="form-select form-select-sm" v-model="state.userId" @@change="handler.load()">
+                    <option value="">Everyone</option><option v-for="u in state.users" :key="u.id" :value="u.id">{{ u.name }}</option>
+                </select></div>
+            <div class="al-search"><label>Search</label>
+                <input type="search" class="form-control form-control-sm" v-model="state.search" @@keyup.enter="handler.load()" placeholder="Number, name or value, then Enter"></div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead><tr><th>When</th><th>User</th><th>Action</th><th>Record</th><th>Details</th></tr></thead>
+                <tbody>
+                    <tr v-if="state.loading"><td colspan="5" class="text-center text-muted py-4">Loading...</td></tr>
+                    <tr v-else-if="!state.rows.length"><td colspan="5" class="text-center text-muted py-4">No changes recorded for this filter. Changes are recorded from the moment audit logging was installed.</td></tr>
+                    <template v-for="r in state.rows" :key="r.id">
+                        <tr class="al-row" @@click="state.open = state.open === r.id ? '' : r.id">
+                            <td class="text-nowrap">{{ methods.when(r.timestamp) }}</td>
+                            <td>{{ methods.user(r.userId) }}</td>
+                            <td><span class="badge" :class="methods.badge(r.action)">{{ r.action }}</span></td>
+                            <td><div class="fw-semibold">{{ r.entityName }}</div><small class="text-muted">{{ r.entityLabel || r.entityId }}</small></td>
+                            <td class="text-muted small">{{ methods.summary(r) }} <i class="fas fa-chevron-down ms-1" :style="{ transform: state.open === r.id ? 'rotate(180deg)' : '' }"></i></td>
+                        </tr>
+                        <tr v-if="state.open === r.id" class="al-detail">
+                            <td colspan="5">
+                                <table class="al-diff" v-if="methods.parsed(r).length">
+                                    <thead><tr><th>Field</th><th v-if="r.action !== 'Created'">Before</th><th>{{ r.action === 'Created' ? 'Value' : 'After' }}</th></tr></thead>
+                                    <tbody><tr v-for="c in methods.parsed(r)" :key="c.field"><td>{{ c.field }}</td><td v-if="r.action !== 'Created'" class="al-old">{{ c.old }}</td><td class="al-new">{{ c.new }}</td></tr></tbody>
+                                </table>
+                                <div v-else class="text-muted small">No field details were recorded.</div>
+                                <div class="small text-muted mt-2">Record id: {{ r.entityId }}</div>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        <div v-if="state.truncated" class="small text-muted mt-2">Showing the latest 500 changes. Narrow the filters to see more.</div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .al-filters { display: grid; grid-template-columns: repeat(4, minmax(130px, 1fr)) minmax(220px, 1.6fr); gap: .8rem; margin-bottom: 1rem; }
+        .al-filters label { display: block; font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: .25rem; }
+        .al-row { cursor: pointer; }
+        .al-detail > td { background: var(--surface-2); }
+        .al-diff { width: 100%; font-size: .85rem; }
+        .al-diff th { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: .2rem .6rem; }
+        .al-diff td { padding: .25rem .6rem; border-top: 1px solid var(--line); word-break: break-word; }
+        .al-old { color: var(--bad); } .al-new { color: var(--good); font-weight: 600; }
+        @@media (max-width: 991px) { .al-filters { grid-template-columns: 1fr 1fr; } }
+    </style>
+    <script src="~/FrontEnd/Pages/Users/AuditLog.cshtml.js"></script>
+}

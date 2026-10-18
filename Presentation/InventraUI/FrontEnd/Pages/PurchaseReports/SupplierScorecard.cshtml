@@ -1,0 +1,44 @@
+@page
+@attribute [Authorize(Roles = "PurchaseReports")]
+@{
+    ViewData["Title"] = "Supplier Scorecard";
+}
+
+<div id="app" v-cloak>
+    <div class="an-card" style="margin:1rem 1.5rem">
+        <div class="an-head">
+            <h6><i class="fas fa-star-half-alt me-2" style="color:var(--primary)"></i>Supplier scorecard <small>who delivers what they promised</small></h6>
+            <div class="d-flex gap-2">
+                <select class="form-select form-select-sm" style="width:auto" v-model.number="state.days" @@change="handler.fetch()"><option :value="90">Last 90 days</option><option :value="180">Last 180 days</option><option :value="365">Last 12 months</option><option :value="730">Last 2 years</option></select>
+                <button class="btn btn-sm btn-outline-secondary" @@click="handler.exportCsv()"><i class="fas fa-download me-1"></i> CSV</button>
+            </div>
+        </div>
+        <div v-if="state.loading" class="text-muted small py-3">Loading...</div>
+        <div v-else-if="!state.rows.length" class="text-muted small py-3">No confirmed purchase orders in this period.</div>
+        <div class="table-responsive" v-else>
+            <table class="table table-sm align-middle">
+                <thead><tr><th>Vendor</th><th class="text-center">Grade</th><th class="text-end">Score</th><th class="text-end">Orders</th><th class="text-end">Spend</th><th class="text-end">Ordered</th><th class="text-end">Received</th><th style="min-width:130px">Fill rate</th><th class="text-end">Open units</th><th class="text-end">Returned</th><th class="text-end">Lead days</th></tr></thead>
+                <tbody>
+                    <tr v-for="r in state.rows" :key="r.vendorId">
+                        <td><b>{{ r.vendorName }}</b></td>
+                        <td class="text-center"><span class="badge" :class="{ 'bg-success': r.grade === 'A', 'bg-info': r.grade === 'B', 'bg-warning text-dark': r.grade === 'C', 'bg-danger': r.grade === 'D' }">{{ r.grade }}</span></td>
+                        <td class="text-end"><b>{{ r.score }}</b></td><td class="text-end">{{ r.orders }}</td><td class="text-end">{{ methods.n(r.spend) }}</td>
+                        <td class="text-end">{{ methods.n(r.ordered) }}</td><td class="text-end">{{ methods.n(r.received) }}</td>
+                        <td><div class="sc-bar"><div :style="{ width: r.fillRate + '%' }" :class="r.fillRate >= 95 ? 'g' : r.fillRate >= 80 ? 'w' : 'b'"></div></div><small>{{ r.fillRate }}%</small></td>
+                        <td class="text-end">{{ methods.n(r.open) }}</td><td class="text-end">{{ methods.n(r.returned) }} <small class="text-muted">({{ r.returnRate }}%)</small></td><td class="text-end">{{ r.leadDays ?? '-' }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="small text-muted">Score out of 100 = 50% fill rate (units received against units ordered) + 30% quality (units not returned) + 20% speed (average days from order to receipt, 7 days or less is full marks). Grades: A 90+, B 75+, C 60+, D below.</div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .sc-bar { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
+        .sc-bar div { height: 100%; } .sc-bar .g { background: #16a34a; } .sc-bar .w { background: #d97706; } .sc-bar .b { background: #dc2626; }
+    </style>
+    <script src="~/FrontEnd/Pages/PurchaseReports/SupplierScorecard.cshtml.js"></script>
+}

@@ -1,0 +1,23 @@
+# Build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+*.csproj.Backup.tmp
+.vs/
+.idea/
+.vscode/
+
+# Runtime data and secrets (never commit)
+App_Data/
+**/wwwroot/app_data/logs/*
+!**/wwwroot/app_data/logs/keep.txt
+*.pfx
+secrets.json
+
+# Local scratch
+_to_delete/
+*.log
+Thumbs.db

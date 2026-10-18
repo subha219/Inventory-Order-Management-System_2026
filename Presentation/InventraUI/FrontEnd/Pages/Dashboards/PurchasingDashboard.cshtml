@@ -1,0 +1,33 @@
+@page
+@model InventraUI.FrontEnd.Pages.Dashboards.PurchasingDashboardModel
+@attribute [Authorize]
+@{
+    ViewData["Title"] = "Purchasing";
+    ViewData["HideHead"] = true;
+}
+
+<link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+<link href="~/css/persona.css" rel="stylesheet" asp-append-version="true" />
+
+<partial name="_PersonaBody" />
+
+@section scripts {
+    <script>
+        window.PERSONA = {
+            title: 'Purchasing',
+            subtitle: 'Here are the purchasing items that need you today.',
+            showUsers: false,
+            tiles: [
+            { title: 'Reorder suggestions', text: 'Items below their reorder point', icon: 'fa-cart-plus', link: '/PurchaseOrders/ReorderSuggestions' },
+            { title: 'Purchase orders', text: 'Draft, confirm and follow orders', icon: 'fa-file-invoice', link: '/PurchaseOrders/PurchaseOrderList' },
+            { title: 'Vendors', text: 'Suppliers and their contacts', icon: 'fa-industry', link: '/Vendors/VendorList' },
+            { title: 'Partner portals', text: 'Let suppliers confirm orders online', icon: 'fa-handshake', link: '/PurchaseOrders/Portal' },
+            { title: 'Supplier scorecard', text: 'On-time and in-full performance', icon: 'fa-star', link: '/PurchaseReports/SupplierScorecard' },
+            { title: 'Goods receives', text: 'What arrived against which order', icon: 'fa-truck-ramp-box', link: '/GoodsReceives/GoodsReceiveList' },
+            { title: 'Purchase returns', text: 'Send goods back to a supplier', icon: 'fa-undo', link: '/PurchaseReturns/PurchaseReturnList' },
+            { title: 'Purchase report', text: 'Spend by vendor and period', icon: 'fa-chart-pie', link: '/PurchaseReports/PurchaseReportList' }
+            ]
+        };
+    </script>
+    <script src="~/js/persona-dashboard.js" asp-append-version="true"></script>
+}

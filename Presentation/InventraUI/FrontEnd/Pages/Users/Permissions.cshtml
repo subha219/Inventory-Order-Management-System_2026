@@ -1,0 +1,55 @@
+@page
+@attribute [Authorize(Roles = "Users")]
+@{
+    ViewData["Title"] = "Permissions";
+}
+
+<div id="app" v-cloak>
+    <div class="an-card" style="margin:1rem 1.5rem">
+        <div class="an-head">
+            <h6><i class="fas fa-user-lock me-2" style="color:var(--primary)"></i>Permissions <small>who can create, edit, confirm, cancel or delete, by role</small></h6>
+        </div>
+
+        <div class="pm-help">
+            Everything is allowed unless you switch it off here. Untick an action to stop a role from doing it in that module. If a person has several roles, an action is blocked when <b>any</b> of their roles has it switched off.
+            Administrators (role <code>Users</code>) are never restricted. Changes take effect within two minutes.
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 align-items-end mb-3">
+            <div><label class="pm-label">Role</label>
+                <select class="form-select form-select-sm" style="min-width:220px" v-model="state.role" @@change="handler.load()"><option value="">Choose a role...</option><option v-for="r in state.roles" :key="r" :value="r">{{ r }}</option></select></div>
+            <template v-if="state.role">
+                <button type="button" class="btn btn-sm btn-outline-secondary" @@click="handler.setAll(true)">Allow everything</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" @@click="handler.setColumn('Delete', false)">Block all deletes</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" @@click="handler.setColumn('Confirm', false)">Block all confirms</button>
+                <button type="button" class="btn btn-sm btn-primary ms-auto" :disabled="state.busy" @@click="handler.save()"><i class="fas fa-save me-1"></i> Save</button>
+            </template>
+        </div>
+
+        <div v-if="!state.role" class="text-muted py-4">Choose a role to see and change what it can do.</div>
+        <div v-else class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead><tr><th>Module</th><th v-for="k in state.keys" :key="k" class="text-center">{{ k }}</th></tr></thead>
+                <tbody>
+                    <tr v-for="m in state.modules" :key="m.module">
+                        <td class="fw-semibold">{{ methods.label(m.module) }}</td>
+                        <td v-for="k in state.keys" :key="k" class="text-center">
+                            <input v-if="m.actions.includes(k)" type="checkbox" class="form-check-input" v-model="state.allowed[m.module + '|' + k]">
+                            <span v-else class="text-muted">-</span>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .pm-help { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: .8rem 1rem; margin-bottom: 1rem; font-size: .88rem; }
+        .pm-help code { background: var(--line); padding: 0 .3rem; border-radius: 4px; }
+        .pm-label { display: block; font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: .2rem; }
+    </style>
+    <script src="~/FrontEnd/Pages/Users/Permissions.cshtml.js"></script>
+}

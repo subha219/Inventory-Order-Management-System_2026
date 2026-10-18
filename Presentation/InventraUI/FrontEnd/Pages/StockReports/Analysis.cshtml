@@ -1,0 +1,60 @@
+@page
+@attribute [Authorize(Roles = "StockReports")]
+@{
+    ViewData["Title"] = "ABC & Aging";
+}
+
+<div id="app" v-cloak>
+    <div class="an-card" style="margin:1rem 1.5rem">
+        <div class="an-head">
+            <h6><i class="fas fa-sort-amount-down me-2" style="color:var(--primary)"></i>ABC &amp; aging <small>what sells, what sits, and where to put it</small></h6>
+            <div class="d-flex gap-2 align-items-center flex-wrap">
+                <select class="form-select form-select-sm" style="width:auto" v-model.number="state.days" @@change="handler.fetch()"><option :value="90">Sales: last 90 days</option><option :value="180">last 180 days</option><option :value="365">last 12 months</option><option :value="730">last 2 years</option></select>
+                <select class="form-select form-select-sm" style="width:auto" v-model.number="state.deadDays" @@change="handler.fetch()"><option :value="60">Dead after 60 days</option><option :value="90">Dead after 90 days</option><option :value="180">Dead after 180 days</option></select>
+                <button class="btn btn-sm btn-outline-secondary" @@click="handler.exportCsv()"><i class="fas fa-download me-1"></i> CSV</button>
+            </div>
+        </div>
+        <div class="az-tiles" v-if="!state.loading">
+            <div class="az-tile"><span>Class A</span><b>{{ state.s.classA }} items</b><small>top 80% of sales value</small></div>
+            <div class="az-tile"><span>Class B</span><b>{{ state.s.classB }} items</b><small>next 15%</small></div>
+            <div class="az-tile"><span>Class C</span><b>{{ state.s.classC }} items</b><small>last 5%</small></div>
+            <div class="az-tile bad"><span>Dead stock</span><b>{{ methods.n(state.s.deadValue) }}</b><small>{{ state.s.deadCount }} items, no recent sale</small></div>
+            <div class="az-tile warn"><span>Slow stock</span><b>{{ methods.n(state.s.slowValue) }}</b><small>{{ state.s.slowCount }} items, over 6 months of cover</small></div>
+            <div class="az-tile"><span>Stock value</span><b>{{ methods.n(state.s.totalStockValue) }}</b><small>at selling price</small></div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap my-2">
+            <input class="form-control form-control-sm" style="max-width:260px" placeholder="Search..." v-model="state.search">
+            <button v-for="f in state.filters" :key="f.key" class="btn btn-sm" :class="state.filter === f.key ? 'btn-primary' : 'btn-outline-secondary'" @@click="state.filter = f.key">{{ f.label }}</button>
+        </div>
+        <div v-if="state.loading" class="text-muted small py-3">Loading...</div>
+        <div class="table-responsive" v-else>
+            <table class="table table-sm align-middle">
+                <thead><tr><th>Product</th><th>Class</th><th>Status</th><th class="text-end">On hand</th><th class="text-end">Sold</th><th class="text-end">Cover (days)</th><th class="text-end">Turns / yr</th><th class="text-end">Last sale</th><th class="text-end">Last in</th><th class="text-end">Stock value</th><th>Suggestion</th></tr></thead>
+                <tbody>
+                    <tr v-for="r in methods.rows()" :key="r.productId">
+                        <td>{{ r.productName }}<br><small class="text-muted">{{ r.productNumber }} {{ r.groupName }}</small></td>
+                        <td><span class="badge" :class="{ 'bg-success': r.abcClass === 'A', 'bg-info': r.abcClass === 'B', 'bg-secondary': r.abcClass === 'C' || r.abcClass === '-' }">{{ r.abcClass }}</span></td>
+                        <td><span class="badge" :class="methods.badge(r.status)">{{ r.status }}</span></td>
+                        <td class="text-end">{{ methods.n(r.onHand) }}</td><td class="text-end">{{ methods.n(r.unitsSold) }}</td>
+                        <td class="text-end">{{ r.coverDays ?? '-' }}</td><td class="text-end">{{ r.turnover ?? '-' }}</td>
+                        <td class="text-end">{{ methods.ago(r.daysSinceLastSale) }}</td><td class="text-end">{{ methods.ago(r.daysSinceLastIn) }}</td>
+                        <td class="text-end">{{ methods.n(r.stockValue) }}</td><td class="small">{{ r.hint }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="small text-muted">Class is by sales value (units delivered times selling price) over the chosen period. Transfers between warehouses are ignored. Cover is how many days current stock lasts at the average sales rate.</div>
+    </div>
+</div>
+
+@section scripts {
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .az-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .7rem; margin: .5rem 0 1rem; }
+        .az-tile { border: 1px solid var(--line); border-radius: 10px; padding: .6rem .8rem; background: var(--surface-2); }
+        .az-tile span { display: block; font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+        .az-tile b { font-size: 1.15rem; } .az-tile small { display: block; color: var(--muted); }
+        .az-tile.bad b { color: #dc2626; } .az-tile.warn b { color: #d97706; }
+    </style>
+    <script src="~/FrontEnd/Pages/StockReports/Analysis.cshtml.js"></script>
+}
